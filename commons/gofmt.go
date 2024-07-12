@@ -3,7 +3,7 @@ package commons
 import (
 	"context"
 
-	"github.com/kiwicom/harness"
+	"github.com/aexvir/harness"
 )
 
 // GoFmt runs gofmt and formats code in place.

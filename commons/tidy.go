@@ -6,7 +6,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/kiwicom/harness"
+	"github.com/aexvir/harness"
 )
 
 // GoModTidy runs go mod tidy and errors if the go.mod or go.sum files have changed.

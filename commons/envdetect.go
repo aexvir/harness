@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/kiwicom/harness"
+	"github.com/aexvir/harness"
 )
 
 // OnlyOnCI returns the task specified as argument only in the case

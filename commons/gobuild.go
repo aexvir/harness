@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kiwicom/harness"
+	"github.com/aexvir/harness"
 )
 
 // GoBuild builds a go binary, from the package specified as argument, outputting it on the relative path

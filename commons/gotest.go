@@ -7,11 +7,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/kiwicom/harness/bintool"
+	"github.com/aexvir/harness/bintool"
 
 	"github.com/fatih/color"
 
-	"github.com/kiwicom/harness"
+	"github.com/aexvir/harness"
 )
 
 // GoTest runs go test recursively.

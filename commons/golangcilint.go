@@ -9,8 +9,8 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/kiwicom/harness"
-	"github.com/kiwicom/harness/bintool"
+	"github.com/aexvir/harness"
+	"github.com/aexvir/harness/bintool"
 )
 
 // GolangCILint aggregates multiple linters that analyze go code.

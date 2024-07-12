@@ -5,12 +5,12 @@ package main
 import (
 	"context"
 
-	"github.com/kiwicom/harness"
-	"github.com/kiwicom/harness/commons"
+	"github.com/aexvir/harness"
+	"github.com/aexvir/harness/commons"
 )
 
 const (
-	pkgName             = "github.com/kiwicom/harness"
+	pkgName             = "github.com/aexvir/harness"
 	commitsarVersion    = "0.20.1"
 	golangcilintVersion = "v1.52.2"
 )

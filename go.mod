@@ -1,4 +1,4 @@
-module github.com/kiwicom/harness
+module github.com/aexvir/harness
 
 go 1.20
 
