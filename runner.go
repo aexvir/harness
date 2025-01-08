@@ -57,10 +57,10 @@ func (r *TaskRunner) Exec() error {
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red(" ✘ %s", elapsed)
+			color.Red(" ✘ %s\n\n", elapsed)
 			return
 		}
-		color.Green(" ✔ %s", elapsed)
+		color.Green(" ✔ %s\n\n", elapsed)
 	}()
 
 	if !r.quiet {
@@ -96,8 +96,7 @@ func Run(ctx context.Context, program string, opts ...RunnerOpt) error {
 // fancy-ish log of a task step.
 func logstep(text string) {
 	fmt.Println(
-		"\n",
-		color.MagentaString(">"),
+		color.MagentaString(" ⌘"),
 		color.New(color.Bold).Sprint(text),
 	)
 }

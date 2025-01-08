@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aexvir/harness"
-	"github.com/aexvir/harness/bintool"
+	"github.com/aexvir/harness/binary"
 )
 
 // GoImports formats code sorting imports taking in account the
@@ -20,9 +20,12 @@ func GoImports(localpkg string, opts ...GoImportsOpt) harness.Task {
 	}
 
 	return func(ctx context.Context) error {
-		imp, _ := bintool.NewGo(
-			"golang.org/x/tools/cmd/goimports",
+		imp, _ := binary.New(
+			"goimports",
 			conf.version,
+			binary.GoBinary(
+				"golang.org/x/tools/cmd/goimports",
+			),
 		)
 
 		if err := imp.Ensure(); err != nil {

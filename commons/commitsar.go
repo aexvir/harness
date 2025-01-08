@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aexvir/harness"
-	"github.com/aexvir/harness/bintool"
+	"github.com/aexvir/harness/binary"
 )
 
 // Commitsar lints commit messages and verifies conventional commits compliance.
@@ -24,11 +24,14 @@ func Commitsar(opts ...CommitsarOpt) harness.Task {
 	return func(ctx context.Context) error {
 		// commitsar can't be used with NewGo at the moment, as it's version reporting is messed up and
 		// it will always attempt to download the specified version
-		cmsr, _ := bintool.New(
-			"commitsar{{.BinExt}}",
+		cmsr, _ := binary.New(
+			"commitsar",
 			conf.version,
-			"https://github.com/aevea/commitsar/releases/download/v{{.Version}}/commitsar_{{.Version}}_{{.GOOS}}_{{.GOARCH}}{{.ArchiveExt}}",
-			bintool.WithVersionCmd("{{.FullCmd}} version"),
+			binary.RemoteArchiveDownload(
+				"https://github.com/aevea/commitsar/releases/download/v{{.Version}}/commitsar_{{.Version}}_{{.GOOS}}_{{.GOARCH}}.tar.gz",
+				map[string]string{"commitsar": "commitsar"},
+			),
+			binary.WithVersionCmd("%s version"),
 		)
 
 		if err := cmsr.Ensure(); err != nil {
