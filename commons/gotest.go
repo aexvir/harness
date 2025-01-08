@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/aexvir/harness/bintool"
+	"github.com/aexvir/harness/binary"
 
 	"github.com/fatih/color"
 
@@ -114,9 +114,10 @@ func GoIntegrationTest(opts ...TestOpt) harness.Task {
 
 func gotestfmt(ctx context.Context, testout []byte) error {
 	fmt.Println("gotestfmt")
-	gtf, _ := bintool.NewGo(
-		"github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt",
+	gtf, _ := binary.New(
+		"gotestfmt",
 		"latest",
+		binary.GoBinary("github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt"),
 	)
 	if err := gtf.Ensure(); err != nil {
 		return err
@@ -129,9 +130,10 @@ func gotestfmt(ctx context.Context, testout []byte) error {
 // tools like gitlab.
 // https://docs.gitlab.com/ee/ci/testing/unit_test_reports.html
 func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
-	gts, _ := bintool.NewGo(
-		"gotest.tools/gotestsum",
+	gts, _ := binary.New(
+		"gotestsum",
 		"latest",
+		binary.GoBinary("gotest.tools/gotestsum"),
 	)
 	if err := gts.Ensure(); err != nil {
 		return err
@@ -156,9 +158,10 @@ func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
 // and ingested by tools like gitlab.
 // https://docs.gitlab.com/ee/ci/testing/test_coverage_visualization.html
 func computeCobertura(ctx context.Context, coverfile, coberturafile string) error {
-	cbrt, _ := bintool.NewGo(
-		"github.com/boumenot/gocover-cobertura",
+	cbrt, _ := binary.New(
+		"gocover-cobertura",
 		"latest",
+		binary.GoBinary("github.com/boumenot/gocover-cobertura"),
 	)
 	if err := cbrt.Ensure(); err != nil {
 		return err
@@ -190,9 +193,10 @@ func computeCobertura(ctx context.Context, coverfile, coberturafile string) erro
 // from the coverage calculation.
 // https://github.com/dave/courtney
 func computeCourtneyCoverage(ctx context.Context, coverfile string) error {
-	ctny, _ := bintool.NewGo(
-		"github.com/dave/courtney",
+	ctny, _ := binary.New(
+		"courtney",
 		"latest",
+		binary.GoBinary("github.com/dave/courtney"),
 	)
 
 	if err := ctny.Ensure(); err != nil {
