@@ -10,7 +10,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/aexvir/harness"
-	"github.com/aexvir/harness/bintool"
+	"github.com/aexvir/harness/binary"
 )
 
 // GolangCILint aggregates multiple linters that analyze go code.
@@ -26,9 +26,10 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 	}
 
 	return func(ctx context.Context) error {
-		gci, _ := bintool.NewGo(
-			"github.com/golangci/golangci-lint/cmd/golangci-lint",
+		gci, _ := binary.New(
+			"golangci-lint",
 			conf.version,
+			binary.GoBinary("github.com/golangci/golangci-lint/cmd/golangci-lint"),
 		)
 
 		if err := gci.Ensure(); err != nil {
