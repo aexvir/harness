@@ -37,6 +37,8 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	var errs []string
 	start := time.Now()
 
+	fmt.Printf("\n")
+
 	if err := h.PreExecHook(ctx); err != nil {
 		return fmt.Errorf("failed to initialize ci harness: %s", err.Error())
 	}
@@ -53,7 +55,7 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	}
 
 	elapsed := time.Since(start).Round(time.Millisecond)
-	fmt.Printf("\n------------------------\n\n")
+	color.New(color.FgHiBlack).Printf("------------------------\n\n")
 
 	if len(errs) > 0 {
 		color.Red(" ✘ finished with errors after %s", elapsed)
@@ -64,7 +66,7 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 		return fmt.Errorf("task finished with errors")
 	}
 
-	color.Green("✔ all good after %s\n\n", elapsed)
+	color.Green(" ✔ all good after %s\n\n", elapsed)
 	return nil
 }
 
