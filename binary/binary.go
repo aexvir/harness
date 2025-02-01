@@ -88,6 +88,10 @@ func (b *Binary) isExpectedVersion() bool {
 		return true
 	}
 
+	if b.versioncmd == "" {
+		return false
+	}
+
 	args := strings.Split(b.versioncmd, " ")
 	logstep(fmt.Sprintf("running %v looking for %s", args, b.version))
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
