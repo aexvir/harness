@@ -91,12 +91,14 @@ func (b *Binary) isExpectedVersion() bool {
 		return false
 	}
 
+	semver := strings.TrimPrefix(b.version, "v")
 	args := strings.Split(b.versioncmd, " ")
-	logstep(fmt.Sprintf("running %v looking for %s", args, b.version))
+
+	logstep(fmt.Sprintf("running %v looking for %s", args, semver))
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	if err != nil {
 		return false
 	}
 
-	return bytes.Contains(out, []byte(b.version))
+	return bytes.Contains(out, []byte(semver))
 }
