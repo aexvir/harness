@@ -1,6 +1,8 @@
 package binary
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Option func(b *Binary)
 
@@ -36,6 +38,6 @@ func WithGOARCHMapping(mapping map[string]string) Option {
 
 func WithVersionCmd(format string) Option {
 	return func(b *Binary) {
-		b.versioncmd = fmt.Sprintf(format, b.command)
+		b.versioncmd = fmt.Sprintf(format, b.commandFullPath)
 	}
 }

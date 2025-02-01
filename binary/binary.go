@@ -11,9 +11,9 @@ import (
 )
 
 type Binary struct {
-	command   string
-	directory string
-	version   string
+	commandFullPath string
+	directory       string
+	version         string
 
 	versioncmd string
 
@@ -22,17 +22,17 @@ type Binary struct {
 }
 
 func New(command, version string, origin Origin, options ...Option) (*Binary, error) {
-	bin := Binary{
-		command:   command,
-		directory: "./bin",
-		version:   strings.TrimPrefix(version, "v"),
+	binDir := filepath.FromSlash("./bin")
 
-		versioncmd: fmt.Sprintf("%s --version", command),
+	bin := Binary{
+		commandFullPath: filepath.Join(binDir, command),
+		directory:       binDir,
+		version:         strings.TrimPrefix(version, "v"),
+
+		versioncmd: fmt.Sprintf("%s --version", filepath.Join(binDir, command)),
 
 		origin: origin,
 	}
-
-	bin.directory = filepath.FromSlash(bin.directory)
 
 	bin.template = Template{
 		GOOS:   runtime.GOOS,
@@ -40,7 +40,7 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 
 		Directory: bin.directory,
 		Name:      command,
-		Cmd:       filepath.Join(bin.directory, bin.command),
+		Cmd:       bin.commandFullPath,
 		Version:   bin.version,
 	}
 
