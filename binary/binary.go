@@ -84,8 +84,14 @@ func (b *Binary) isExpectedVersion() bool {
 	logstep(fmt.Sprintf("running %v looking for %s", args, b.version))
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	if err != nil {
+		logstep(fmt.Sprintf("error: %s", err))
 		return false
 	}
 
-	return bytes.Contains(out, []byte(b.version))
+	if bytes.Contains(out, []byte(b.version)) {
+		return true
+	}
+
+	logstep(fmt.Sprintf("no hit in %s", string(out)))
+	return false
 }
