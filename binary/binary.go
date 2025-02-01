@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const SkipVersionCheck = ""
+
 type Binary struct {
 	command   string
 	directory string
@@ -83,6 +85,10 @@ func (b *Binary) isInstalled() bool {
 func (b *Binary) isExpectedVersion() bool {
 	if b.version == "latest" {
 		return true
+	}
+
+	if b.versioncmd == SkipVersionCheck {
+		return false
 	}
 
 	args := strings.Split(b.versioncmd, " ")
