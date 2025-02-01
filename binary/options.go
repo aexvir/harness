@@ -34,8 +34,20 @@ func WithGOARCHMapping(mapping map[string]string) Option {
 	}
 }
 
+// WithVersionCmd allows customizing the command that is run to check the
+// version of the binary. The format string should contain a single `%s`
+// placeholder that will be replaced with the binary's command name.
+//
+// This is useful for binaries that don't support the `--version` flag.
+//
+// If the format string is SkipVersionCheck, the version check will be disabled.
 func WithVersionCmd(format string) Option {
 	return func(b *Binary) {
+		if format == SkipVersionCheck {
+			b.versioncmd = SkipVersionCheck
+			return
+		}
+
 		b.versioncmd = fmt.Sprintf(format, b.command)
 	}
 }
