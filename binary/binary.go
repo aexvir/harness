@@ -72,6 +72,7 @@ func (b *Binary) Ensure() error {
 }
 
 func (b *Binary) Install() error {
+	logstep(fmt.Sprintf("installing %s", b.template.Name))
 	return b.origin.Install(b.template)
 }
 

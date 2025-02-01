@@ -32,7 +32,6 @@ func RemoteBinaryDownload(url string) Origin {
 }
 
 func (r *remotebin) Install(template Template) error {
-	logstep(fmt.Sprintf("installing %s", template.Name))
 	if err := os.MkdirAll(template.Directory, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination folder %s: %w", template.Directory, err)
 	}
@@ -84,7 +83,6 @@ func RemoteArchiveDownload(url string, binaries map[string]string) Origin {
 }
 
 func (r *remotearchive) Install(template Template) error {
-	logstep(fmt.Sprintf("installing %s", template.Name))
 	if err := os.MkdirAll(template.Directory, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination folder %s: %w", template.Directory, err)
 	}
@@ -132,7 +130,11 @@ func (o *gopkg) Install(template Template) error {
 		return err
 	}
 
-	installcmd := fmt.Sprintf("GOBIN=%s go install %s@v%s", path, o.pkg, template.Version)
+	goinstallcmd := fmt.Sprintf("go install %s@v%s", o.pkg, template.Version)
+	installcmd := fmt.Sprintf("GOBIN=%s %s", path, goinstallcmd)
+
+	logstep(fmt.Sprintf("running %s", goinstallcmd))
+
 	if _, err := shellcmd.Command(installcmd).Output(); err != nil {
 		return fmt.Errorf("unable to install executable: %w", err)
 	}
@@ -272,8 +274,7 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 
 func logstep(text string) {
 	fmt.Println(
-		"\n",
-		color.MagentaString(">"),
+		color.BlueString(">"),
 		color.New(color.Bold).Sprint(text),
 	)
 }
