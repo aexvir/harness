@@ -67,7 +67,6 @@ func (b *Binary) Ensure() error {
 	if b.isInstalled() && b.isExpectedVersion() {
 		return nil
 	}
-	logstep("downloading ")
 	return b.Install()
 }
 
