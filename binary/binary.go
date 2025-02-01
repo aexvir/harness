@@ -13,9 +13,9 @@ import (
 const SkipVersionCheck = ""
 
 type Binary struct {
-	command   string
-	directory string
-	version   string
+	commandFullPath string
+	directory       string
+	version         string
 
 	versioncmd string
 
@@ -28,17 +28,18 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		return nil, fmt.Errorf("version must be set")
 	}
 
-	bin := Binary{
-		command:   command,
-		directory: "./bin",
-		version:   version,
+	binDir := filepath.FromSlash("./bin")
+	cmdFullPath := filepath.Join(binDir, command)
 
-		versioncmd: fmt.Sprintf("%s --version", command),
+	bin := Binary{
+		commandFullPath: cmdFullPath,
+		directory:       binDir,
+		version:         version,
+
+		versioncmd: fmt.Sprintf("%s --version", cmdFullPath),
 
 		origin: origin,
 	}
-
-	bin.directory = filepath.FromSlash(bin.directory)
 
 	bin.template = Template{
 		GOOS:   runtime.GOOS,
@@ -46,8 +47,8 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 
 		Directory: bin.directory,
 		Name:      command,
-		Cmd:       filepath.Join(bin.directory, bin.command),
-		Version:   version,
+		Cmd:       bin.commandFullPath,
+		Version:   bin.version,
 	}
 
 	for _, opt := range options {

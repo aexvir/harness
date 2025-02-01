@@ -1,6 +1,8 @@
 package binary
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Option func(b *Binary)
 
@@ -48,6 +50,6 @@ func WithVersionCmd(format string) Option {
 			return
 		}
 
-		b.versioncmd = fmt.Sprintf(format, b.command)
+		b.versioncmd = fmt.Sprintf(format, b.commandFullPath)
 	}
 }
