@@ -272,8 +272,7 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 
 func logstep(text string) {
 	fmt.Println(
-		"\n",
-		color.MagentaString(">"),
+		color.BlueString(">"),
 		color.New(color.Bold).Sprint(text),
 	)
 }
