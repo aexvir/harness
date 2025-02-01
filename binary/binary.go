@@ -24,6 +24,10 @@ type Binary struct {
 func New(command, version string, origin Origin, options ...Option) (*Binary, error) {
 	binDir := filepath.FromSlash("./bin")
 
+	if runtime.GOOS == "windows" {
+		command += ".exe"
+	}
+
 	bin := Binary{
 		commandFullPath: filepath.Join(binDir, command),
 		directory:       binDir,
@@ -42,6 +46,10 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		Name:      command,
 		Cmd:       bin.commandFullPath,
 		Version:   bin.version,
+	}
+
+	if runtime.GOOS == "windows" {
+		bin.template.Extension = ".exe"
 	}
 
 	for _, opt := range options {
