@@ -77,8 +77,9 @@ func (b *Binary) isInstalled() bool {
 	return err == nil
 }
 
-// isExpectedVersion returns true if the binary is installed and the version matches
-// what was configured.
+// isExpectedVersion returns true if binary version matches the expected version
+// or latest version was requested. For the 'latest' use-case, we can't really
+// check the binary version so we just return true.
 func (b *Binary) isExpectedVersion() bool {
 	if b.version == "latest" {
 		return true
