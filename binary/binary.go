@@ -22,6 +22,10 @@ type Binary struct {
 }
 
 func New(command, version string, origin Origin, options ...Option) (*Binary, error) {
+	if version == "" {
+		return nil, fmt.Errorf("version must be set")
+	}
+
 	bin := Binary{
 		command:   command,
 		directory: "./bin",
@@ -76,7 +80,7 @@ func (b *Binary) isInstalled() bool {
 // isExpectedVersion returns true if the binary is installed and the version matches
 // what was configured.
 func (b *Binary) isExpectedVersion() bool {
-	if b.version == "latest" || b.version == "" {
+	if b.version == "latest" {
 		return true
 	}
 
