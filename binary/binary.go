@@ -25,7 +25,7 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 	bin := Binary{
 		command:   command,
 		directory: "./bin",
-		version:   version,
+		version:   strings.TrimPrefix(version, "v"),
 
 		versioncmd: fmt.Sprintf("%s --version", command),
 
@@ -41,7 +41,7 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		Directory: bin.directory,
 		Name:      command,
 		Cmd:       filepath.Join(bin.directory, bin.command),
-		Version:   version,
+		Version:   bin.version,
 	}
 
 	for _, opt := range options {
