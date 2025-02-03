@@ -13,7 +13,6 @@ type Template struct {
 	Name      string
 	Cmd       string
 	Version   string
-	Extension string
 }
 
 func (t Template) Resolve(format string) (string, error) {
