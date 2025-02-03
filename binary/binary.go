@@ -31,6 +31,10 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 	binDir := filepath.FromSlash("./bin")
 	cmdFullPath := filepath.Join(binDir, command)
 
+	if runtime.GOOS == "windows" {
+		cmdFullPath += ".exe"
+	}
+
 	bin := Binary{
 		commandFullPath: cmdFullPath,
 		directory:       binDir,
