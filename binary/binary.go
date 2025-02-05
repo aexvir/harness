@@ -28,12 +28,13 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		return nil, fmt.Errorf("version must be set")
 	}
 
-	binDir := filepath.FromSlash("./bin")
-	cmdFullPath := filepath.Join(binDir, command)
-
+	var extension string
 	if runtime.GOOS == "windows" {
-		cmdFullPath += ".exe"
+		extension = ".exe"
 	}
+
+	binDir := filepath.FromSlash("./bin")
+	cmdFullPath := filepath.Join(binDir, command) + extension
 
 	bin := Binary{
 		commandFullPath: cmdFullPath,
@@ -53,6 +54,7 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		Name:      command,
 		Cmd:       bin.commandFullPath,
 		Version:   bin.version,
+		Extension: extension,
 	}
 
 	for _, opt := range options {
