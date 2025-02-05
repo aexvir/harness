@@ -131,6 +131,8 @@ func (o *gopkg) Install(template Template) error {
 	}
 
 	installcmd := fmt.Sprintf("GOBIN=%s go install %s@%s", path, o.pkg, template.Version)
+	logstep(fmt.Sprintf("running %s", installcmd))
+
 	if _, err := shellcmd.Command(installcmd).Output(); err != nil {
 		return fmt.Errorf("unable to install executable: %w", err)
 	}
