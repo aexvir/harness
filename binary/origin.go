@@ -32,7 +32,6 @@ func RemoteBinaryDownload(url string) Origin {
 }
 
 func (r *remotebin) Install(template Template) error {
-	logstep(fmt.Sprintf("installing %s", template.Name))
 	if err := os.MkdirAll(template.Directory, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination folder %s: %w", template.Directory, err)
 	}
@@ -84,7 +83,6 @@ func RemoteArchiveDownload(url string, binaries map[string]string) Origin {
 }
 
 func (r *remotearchive) Install(template Template) error {
-	logstep(fmt.Sprintf("installing %s", template.Name))
 	if err := os.MkdirAll(template.Directory, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination folder %s: %w", template.Directory, err)
 	}

@@ -70,11 +70,11 @@ func (b *Binary) Ensure() error {
 	if b.isInstalled() && b.isExpectedVersion() {
 		return nil
 	}
-	logstep("downloading ")
 	return b.Install()
 }
 
 func (b *Binary) Install() error {
+	logstep(fmt.Sprintf("installing %s", b.template.Name))
 	return b.origin.Install(b.template)
 }
 
