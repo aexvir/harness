@@ -26,7 +26,11 @@ type TaskRunner struct {
 
 // Cmd builds a command runner for a specific Executable.
 func Cmd(ctx context.Context, executable string, opts ...RunnerOpt) (*TaskRunner, error) {
-	cmd := exec.CommandContext(ctx, executable)
+	bin := executable
+	if strings.HasPrefix(executable, "go tool ") {
+		bin = "go"
+	}
+	cmd := exec.CommandContext(ctx, bin)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -44,7 +48,7 @@ func Cmd(ctx context.Context, executable string, opts ...RunnerOpt) (*TaskRunner
 		}
 	}
 
-	cmd.Args = append([]string{executable}, r.Arguments...)
+	cmd.Args = append(strings.Split(executable, " "), r.Arguments...)
 
 	return &r, nil
 }

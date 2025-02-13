@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/cheggaaa/pb/v3"
@@ -22,6 +23,8 @@ type Origin interface {
 	// Install performs the installation of a binary.
 	// The template contains information about the target environment and desired configuration.
 	Install(template Template) error
+	BinPath(template Template) string
+	IsInstalled(template Template) bool
 }
 
 // remotebin implements [Origin] for direct binary downloads from a URL.
@@ -77,6 +80,15 @@ func (r *remotebin) Install(template Template) error {
 
 	_, err = io.Copy(out, data)
 	return err
+}
+
+func (r *remotebin) BinPath(template Template) string {
+	return template.Cmd
+}
+
+func (r *remotebin) IsInstalled(template Template) bool {
+	_, err := os.Stat(template.Cmd)
+	return err == nil
 }
 
 // remotearchive implements Origin for downloading and extracting archived binaries.
@@ -135,6 +147,15 @@ func (r *remotearchive) Install(template Template) error {
 	)
 }
 
+func (r *remotearchive) BinPath(template Template) string {
+	return template.Cmd
+}
+
+func (r *remotearchive) IsInstalled(template Template) bool {
+	_, err := os.Stat(template.Cmd)
+	return err == nil
+}
+
 // gopkg implements Origin for installing binaries using Go's package management.
 // It provisions binaries via 'go install'.
 type gopkg struct {
@@ -152,6 +173,38 @@ func GoBinary(pkg string) Origin {
 }
 
 func (o *gopkg) Install(template Template) error {
+	if goToolSupported(runtime.Version()) {
+		tools, err := loadProjectTools()
+		if err != nil {
+			return err
+		}
+
+		path, installed := tools[template.Name]
+
+		if installed && path != o.pkg {
+			return fmt.Errorf(
+				"tool %s already defined with different origin: got %s but in go.mod is %s",
+				template.Name, path, o.pkg,
+			)
+		}
+
+		// install or update, it's the same command
+		tool := fmt.Sprintf("%s@%s", o.pkg, template.Version)
+		action := fmt.Sprintf("adding %s to go tools", tool)
+		if installed {
+			action = fmt.Sprintf("updating %s to version %s", tool, template.Version)
+		}
+		logstep(action)
+		if err := exec.Command("go", "get", "-tool", tool).Run(); err != nil {
+			return fmt.Errorf("failed to install tool %s: %w", tool, err)
+		}
+		logstep("running go mod tidy")
+		if err := exec.Command("go", "mod", "tidy").Run(); err != nil {
+			return fmt.Errorf("failed to run go mod tidy: %w", err)
+		}
+		return nil
+	}
+
 	if err := os.MkdirAll(template.Directory, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination folder %s: %w", template.Directory, err)
 	}
@@ -172,6 +225,27 @@ func (o *gopkg) Install(template Template) error {
 	// rename if name is different
 
 	return nil
+}
+
+func (r *gopkg) BinPath(template Template) string {
+	if goToolSupported(runtime.Version()) {
+		return fmt.Sprintf("go tool %s", template.Name)
+	}
+	return template.Cmd
+}
+
+func (r *gopkg) IsInstalled(template Template) bool {
+	if !goToolSupported(runtime.Version()) {
+		_, err := os.Stat(template.Cmd)
+		return err == nil
+	}
+
+	tools, err := loadProjectTools()
+	if err != nil {
+		return false
+	}
+	_, installed := tools[template.Name]
+	return installed
 }
 
 // download downloads a file from a URL to a local destination.
