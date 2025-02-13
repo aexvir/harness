@@ -3,7 +3,6 @@ package binary
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -49,7 +48,7 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		directory: bindir,
 		version:   version,
 
-		versioncmd: fmt.Sprintf("%s --version", cmdQualifiedPath),
+		versioncmd: "%s --version",
 
 		origin: origin,
 	}
@@ -75,7 +74,7 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 // BinPath returns the qualified path to the binary.
 // It's recommended to use this method to obtain the binary command string.
 func (b *Binary) BinPath() string {
-	return b.template.Cmd
+	return b.origin.BinPath(b.template)
 }
 
 // Ensure the binary is installed and it corresponds to the expected version.
@@ -94,8 +93,7 @@ func (b *Binary) Install() error {
 
 // isInstalled returns true if the binary is installed.
 func (b *Binary) isInstalled() bool {
-	_, err := os.Stat(b.template.Cmd)
-	return err == nil
+	return b.origin.IsInstalled(b.template)
 }
 
 // isExpectedVersion returns true if binary version matches the expected version
@@ -113,7 +111,10 @@ func (b *Binary) isExpectedVersion() bool {
 	}
 
 	semver := strings.TrimPrefix(b.version, "v")
-	args := strings.Split(b.versioncmd, " ")
+	args := strings.Split(
+		fmt.Sprintf(b.versioncmd, b.origin.BinPath(b.template)),
+		" ",
+	)
 
 	logstep(fmt.Sprintf("running %v looking for %s", args, semver))
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()

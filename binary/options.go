@@ -1,9 +1,5 @@
 package binary
 
-import (
-	"fmt"
-)
-
 type Option func(b *Binary)
 
 // WithGOOSMapping allows remapping the value of GOOS in the template
@@ -50,6 +46,6 @@ func WithVersionCmd(format string) Option {
 			return
 		}
 
-		b.versioncmd = fmt.Sprintf(format, b.template.Cmd)
+		b.versioncmd = format
 	}
 }
