@@ -174,7 +174,7 @@ func (o *gopkg) Install(template Template) error {
 	cmd := exec.Command("go", "install", o.pkg+"@"+template.Version)
 	cmd.Env = append(os.Environ(), "GOBIN="+path)
 	installcmd := fmt.Sprintf("GOBIN=%s go install %s@%s", path, o.pkg, template.Version)
-	logstep(fmt.Sprintf("running %s", installcmd))
+	logdetail(fmt.Sprintf("running %s", installcmd))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("unable to install executable: %w", err)
 	}
@@ -209,13 +209,16 @@ func download(url, destination string) (err error) {
 	}
 	defer resp.Body.Close()
 
+	data, finish := progress(resp.Body, resp.ContentLength)
+	defer finish()
+
 	out, err := os.Create(destination)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", destination, err)
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(out, data)
 	if err != nil {
 		return fmt.Errorf("failed to copy data to file %s: %w", destination, err)
 	}
@@ -280,9 +283,11 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 		New64(size).
 		SetTemplate(
 			pb.ProgressBarTemplate(
-				`{{string . "prefix"}}{{counters . }}` +
-					` {{bar . "[" "=" ">" " " "]" }} {{percent . }}` +
-					` {{speed . "%s/s" }}{{string . "suffix"}}`,
+				color.New(color.FgHiBlack).Sprint(
+					`   └ {{string . "prefix"}}{{counters . }}` +
+						` {{bar . "[" "=" ">" " " "]" }} {{percent . }}` +
+						` {{speed . "%s/s" }}{{string . "suffix"}}`,
+				),
 			),
 		).
 		SetRefreshRate(time.Second / 60).
