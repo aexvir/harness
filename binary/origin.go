@@ -140,7 +140,7 @@ func (r *remotearchive) Install(template Template) error {
 
 			// otherwise only extract files that are present in the map
 			if replacement, ok := mapping[path]; ok {
-				logdetail(fmt.Sprintf("resolved %s to %s", path, replacement))
+				logdetail(fmt.Sprintf("  resolved %s to %s", path, replacement))
 				return &replacement
 			}
 			return nil
@@ -190,16 +190,16 @@ func (o *gopkg) Install(template Template) error {
 // download downloads a file from a URL to a local destination.
 // If the destination file already exists, the download is skipped.
 func download(url, destination string) (err error) {
-	logstep(fmt.Sprintf("downloading %s to %s", url, destination))
+	logdetail(fmt.Sprintf("downloading %s to %s", url, destination))
 
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red("   ✘ %s", elapsed)
+			color.Red("     ✘ %s", elapsed)
 			return
 		}
-		color.Green("   ✔ %s", elapsed)
+		color.Green("     ✔ %s", elapsed)
 	}()
 
 	if _, err := os.Stat(destination); err == nil {
@@ -233,16 +233,16 @@ func download(url, destination string) (err error) {
 // Files are extracted with executable permissions (0755).
 // The source archive is removed after successful extraction.
 func extract(compressed, destination string, processor func(path string) *string) (err error) {
-	logstep(fmt.Sprintf("extracting %s", compressed))
+	logdetail(fmt.Sprintf("extracting %s", compressed))
 
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red("   ✘ %s", elapsed)
+			color.Red("     ✘ %s", elapsed)
 			return
 		}
-		color.Green("   ✔ %s", elapsed)
+		color.Green("     ✔ %s", elapsed)
 	}()
 
 	file, err := os.Open(compressed)

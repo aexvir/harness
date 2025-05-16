@@ -31,11 +31,7 @@ type Binary struct {
 // New instantiates a new [Binary] given a command name, a version and it's [Origin].
 // Origins determine where the binary is provisioned from, if it needs installation and how
 // the installation process is handled.
-func New(command, version string, origin Origin, options ...Option) (*Binary, error) {
-	if version == "" {
-		return nil, fmt.Errorf("version must be set")
-	}
-
+func New(command, version string, origin Origin, options ...Option) *Binary {
 	var extension string
 	if runtime.GOOS == "windows" {
 		extension = ".exe"
@@ -69,7 +65,12 @@ func New(command, version string, origin Origin, options ...Option) (*Binary, er
 		opt(&bin)
 	}
 
-	return &bin, nil
+	return &bin
+}
+
+// Name returns the command name of the binary.
+func (b *Binary) Name() string {
+	return b.template.Name
 }
 
 // BinPath returns the qualified path to the binary.
@@ -80,9 +81,14 @@ func (b *Binary) BinPath() string {
 
 // Ensure the binary is installed and it corresponds to the expected version.
 func (b *Binary) Ensure() error {
+	if b.version == "" {
+		return fmt.Errorf("version must be set")
+	}
+
 	if b.isInstalled() && b.isExpectedVersion() {
 		return nil
 	}
+
 	return b.Install()
 }
 

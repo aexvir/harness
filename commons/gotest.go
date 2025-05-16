@@ -114,7 +114,7 @@ func GoIntegrationTest(opts ...TestOpt) harness.Task {
 
 func gotestfmt(ctx context.Context, testout []byte) error {
 	fmt.Println("gotestfmt")
-	gtf, _ := binary.New(
+	gtf := binary.New(
 		"gotestfmt",
 		"latest",
 		binary.GoBinary("github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt"),
@@ -130,7 +130,7 @@ func gotestfmt(ctx context.Context, testout []byte) error {
 // tools like gitlab.
 // https://docs.gitlab.com/ee/ci/testing/unit_test_reports.html
 func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
-	gts, _ := binary.New(
+	gts := binary.New(
 		"gotestsum",
 		"latest",
 		binary.GoBinary("gotest.tools/gotestsum"),
@@ -158,7 +158,7 @@ func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
 // and ingested by tools like gitlab.
 // https://docs.gitlab.com/ee/ci/testing/test_coverage_visualization.html
 func computeCobertura(ctx context.Context, coverfile, coberturafile string) error {
-	cbrt, _ := binary.New(
+	cbrt := binary.New(
 		"gocover-cobertura",
 		"latest",
 		binary.GoBinary("github.com/boumenot/gocover-cobertura"),
@@ -193,7 +193,7 @@ func computeCobertura(ctx context.Context, coverfile, coberturafile string) erro
 // from the coverage calculation.
 // https://github.com/dave/courtney
 func computeCourtneyCoverage(ctx context.Context, coverfile string) error {
-	ctny, _ := binary.New(
+	ctny := binary.New(
 		"courtney",
 		"latest",
 		binary.GoBinary("github.com/dave/courtney"),

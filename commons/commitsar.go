@@ -24,7 +24,7 @@ func Commitsar(opts ...CommitsarOpt) harness.Task {
 	return func(ctx context.Context) error {
 		// commitsar can't be used with NewGo at the moment, as it's version reporting is messed up and
 		// it will always attempt to download the specified version
-		cmsr, _ := binary.New(
+		cmsr := binary.New(
 			"commitsar",
 			conf.version,
 			binary.RemoteArchiveDownload(
