@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
+
 	"github.com/aexvir/harness"
 	"github.com/aexvir/harness/binary"
-	"github.com/fatih/color"
 )
 
 // Provision a list of binaries.
