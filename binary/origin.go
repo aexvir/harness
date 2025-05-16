@@ -1,9 +1,6 @@
 package binary
 
 import (
-	"archive/tar"
-	"compress/gzip"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -250,59 +247,25 @@ func extract(compressed, destination string, processor func(path string) *string
 		return fmt.Errorf("failed to open compressed file: %w", err)
 	}
 	defer file.Close()
+	defer os.Remove(compressed)
 
-	decompressor, err := gzip.NewReader(file)
-	if err != nil {
-		return fmt.Errorf("failed to create gzip reader: %w", err)
-	}
-	defer decompressor.Close()
-
-	reader := tar.NewReader(decompressor)
-
-	if err := os.MkdirAll(destination, 0o755); err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
+	// sniff mime header to determine file type
+	header := make([]byte, 512)
+	file.Read(header)
+	mime := http.DetectContentType(header)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
 	}
 
-	for {
-		header, err := reader.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return fmt.Errorf("error while extracting %s: %w", compressed, err)
-		}
-
-		processed := processor(header.Name)
-		if processed == nil {
-			continue
-		}
-		target := filepath.Join(destination, *processed)
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o755); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", target, err)
-			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", filepath.Dir(target), err)
-			}
-
-			out, err := os.Create(target)
-			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", target, err)
-			}
-			defer out.Close()
-
-			_ = os.Chmod(target, 0o755)
-
-			if _, err := io.Copy(out, reader); err != nil {
-				return fmt.Errorf("failed to copy data to file %s: %w", target, err)
-			}
-		}
+	switch mime {
+	case "application/x-gzip":
+		return untar(file, destination, processor)
+	case "application/zip":
+		info, _ := file.Stat()
+		return unzip(file, info.Size(), destination, processor)
+	default:
+		return fmt.Errorf("unsupported format: %s", mime)
 	}
-
-	return os.Remove(compressed)
 }
 
 // progress wraps an io.Reader to display a progress bar when running in a terminal.
