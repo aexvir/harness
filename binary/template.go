@@ -41,3 +41,13 @@ func (t Template) Resolve(format string) (string, error) {
 
 	return bld.String(), nil
 }
+
+// Resolve executes the provided format string as a template with the Template's fields.
+// Panics if the template can't be resolved correctly.
+func (t Template) MustResolve(format string) string {
+	resolved, err := t.Resolve(format)
+	if err != nil {
+		panic(err)
+	}
+	return resolved
+}
