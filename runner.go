@@ -64,7 +64,7 @@ func (r *TaskRunner) Exec() error {
 	}()
 
 	if !r.quiet {
-		logstep(fmt.Sprint(r.Executable, " ", strings.Join(r.Arguments, " ")))
+		LogStep(fmt.Sprint(r.Executable, " ", strings.Join(r.Arguments, " ")))
 	}
 
 	err = r.cmd.Run()
@@ -91,14 +91,6 @@ func Run(ctx context.Context, program string, opts ...RunnerOpt) error {
 	}
 
 	return rnr.Exec()
-}
-
-// fancy-ish log of a task step.
-func logstep(text string) {
-	fmt.Println(
-		color.MagentaString(" ⌘"),
-		color.New(color.Bold).Sprint(text),
-	)
 }
 
 // RunnerOpt allows customizing the behavior of the command runner.
