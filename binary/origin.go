@@ -94,6 +94,12 @@ type remotearchive struct {
 //
 // The binaries parameter maps archive paths to the desired binary names in the
 // installation directory. Only files specified in this map will be extracted.
+// Both archive paths and binary names can contain template variables that will be resolved
+// using the [Template] values during installation.
+//
+// e.g. {"grafana-v{{.Version}}/bin/grafana-server": "grafana"} will resolve the path by replacing
+// the version in the string and will extract the file under that path to a binary called simply
+// "grafana" in the root of the bin directory.
 func RemoteArchiveDownload(url string, binaries map[string]string) Origin {
 	return &remotearchive{
 		urlformat: url,
@@ -117,17 +123,24 @@ func (r *remotearchive) Install(template Template) error {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
 
+	// resolve binary mapping templates
+	mapping := make(map[string]string, len(r.binaries))
+	for path, replacement := range r.binaries {
+		mapping[template.MustResolve(path)] = template.MustResolve(replacement)
+	}
+
 	return extract(
 		filepath.Join(template.Directory, tmpname),
 		template.Directory,
 		func(path string) *string {
 			// if there's no file override, extract the file as is
-			if len(r.binaries) == 0 {
+			if len(mapping) == 0 {
 				return &path
 			}
 
 			// otherwise only extract files that are present in the map
-			if replacement, ok := r.binaries[path]; ok {
+			if replacement, ok := mapping[path]; ok {
+				logdetail(fmt.Sprintf("resolved %s to %s", path, replacement))
 				return &replacement
 			}
 			return nil
@@ -319,6 +332,13 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 func logstep(text string) {
 	fmt.Println(
 		color.BlueString(" •"),
+		color.New(color.FgHiBlack).Sprint(text),
+	)
+}
+
+func logdetail(text string) {
+	fmt.Println(
+		color.New(color.FgHiBlack).Sprint("   └"),
 		color.New(color.FgHiBlack).Sprint(text),
 	)
 }
