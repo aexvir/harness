@@ -20,7 +20,7 @@ func GoImports(localpkg string, opts ...GoImportsOpt) harness.Task {
 	}
 
 	return func(ctx context.Context) error {
-		imp, _ := binary.New(
+		imp := binary.New(
 			"goimports",
 			conf.version,
 			binary.GoBinary(

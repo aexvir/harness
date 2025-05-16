@@ -26,7 +26,7 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 	}
 
 	return func(ctx context.Context) error {
-		gci, _ := binary.New(
+		gci := binary.New(
 			"golangci-lint",
 			conf.version,
 			binary.GoBinary("github.com/golangci/golangci-lint/cmd/golangci-lint"),
