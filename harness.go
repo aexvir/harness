@@ -70,6 +70,17 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	return nil
 }
 
+// Logs the name of a task step.
+// Harness.Run automatically uses this function to print what is running,
+// this is mainly useful for adding additional info when defining ad-hoc tasks inside
+// a Harness.Exec block.
+func LogStep(text string) {
+	fmt.Println(
+		color.MagentaString(" ⌘"),
+		color.New(color.Bold).Sprint(text),
+	)
+}
+
 // Task defines the basic function that the harness executes.
 // Additional configuration and tweaks can be done by using clojures which return
 // Tasks.
