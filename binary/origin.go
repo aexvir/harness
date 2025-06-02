@@ -263,7 +263,7 @@ func extract(compressed, destination string, processor func(path string) *string
 	switch mime {
 	case "application/x-gzip":
 		return untar(file, destination, processor)
-	case "application/zip":
+	case "application/zip", "application/octet-stream":
 		info, _ := file.Stat()
 		return unzip(file, info.Size(), destination, processor)
 	default:
