@@ -24,6 +24,8 @@ type Template struct {
 	// Extension is the file extension for the binary.
 	// Usually it's empty on unix systems and ".exe" on windows.
 	Extension string
+	// ArchiveExtension is the archive extension for the archive containing the binary.
+	ArchiveExtension string
 }
 
 // Resolve executes the provided format string as a template with the Template's fields.

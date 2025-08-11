@@ -87,7 +87,7 @@ type remotearchive struct {
 // RemoteArchiveDownload creates a new Origin that downloads and extracts binaries from
 // a compressed archive. The URL can contain template variables that will be resolved
 // using the [Template] values during installation.
-// e.g. "https://github.com/aevea/commitsar/releases/download/v{{.Version}}/commitsar_{{.Version}}_{{.GOOS}}_{{.GOARCH}}.tar.gz",
+// e.g. "https://github.com/aevea/commitsar/releases/download/v{{.Version}}/commitsar_{{.Version}}_{{.GOOS}}_{{.GOARCH}}{{.ArchiveExtension}}",
 //
 // The binaries parameter maps archive paths to the desired binary names in the
 // installation directory. Only files specified in this map will be extracted.
