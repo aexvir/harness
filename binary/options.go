@@ -36,6 +36,20 @@ func WithGOARCHMapping(mapping map[string]string) Option {
 	}
 }
 
+// WithGOOSArchiveExtensionMapping allows remapping the value of ArchiveExtension in the template
+// before triggering the installation.
+// This is useful for example in cases where different compression methods are used
+// across different platforms.
+// The key of the map is the GOOS value and the value is the wanted
+// replacement, e.g. {"windows": ".zip"}.
+func WithGOOSArchiveExtensionMapping(mapping map[string]string) Option {
+	return func(b *Binary) {
+		if replacement, ok := mapping[b.template.GOOS]; ok {
+			b.template.ArchiveExtension = replacement
+		}
+	}
+}
+
 // WithVersionCmd allows customizing the command that is run to check the
 // version of the binary. The format string should contain a single `%s`
 // placeholder that will be replaced with the binary's command name.

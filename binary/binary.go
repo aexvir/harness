@@ -54,11 +54,12 @@ func New(command, version string, origin Origin, options ...Option) *Binary {
 		GOOS:   runtime.GOOS,
 		GOARCH: runtime.GOARCH,
 
-		Directory: bin.directory,
-		Name:      command,
-		Cmd:       cmdQualifiedPath,
-		Version:   bin.version,
-		Extension: extension,
+		Directory:        bin.directory,
+		Name:             command,
+		Cmd:              cmdQualifiedPath,
+		Version:          bin.version,
+		Extension:        extension,
+		ArchiveExtension: ".tar.gz",
 	}
 
 	for _, opt := range options {
