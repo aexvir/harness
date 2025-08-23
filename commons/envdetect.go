@@ -3,6 +3,7 @@ package commons
 import (
 	"context"
 	"os"
+	"runtime"
 
 	"github.com/aexvir/harness"
 )
@@ -27,6 +28,35 @@ func OnlyLocally(task harness.Task) harness.Task {
 	}
 
 	return task
+}
+
+// OnlyOnGOOS returns the task specified as argument only in the case
+// the current OS is the specified GOOS.
+// Otherwise it returns a noop task.
+func OnlyOnGOOS(goos string, task harness.Task) harness.Task {
+	if runtime.GOOS != goos {
+		return noop
+	}
+
+	return task
+}
+
+// OnlyOnWindows returns the task specified as argument only in the case
+// the current OS is Windows.
+func OnlyOnWindows(task harness.Task) harness.Task {
+	return OnlyOnGOOS("windows", task)
+}
+
+// OnlyOnLinux returns the task specified as argument only in the case
+// the current OS is Linux.
+func OnlyOnLinux(task harness.Task) harness.Task {
+	return OnlyOnGOOS("linux", task)
+}
+
+// OnlyOnDarwin returns the task specified as argument only in the case
+// the current OS is Darwin.
+func OnlyOnDarwin(task harness.Task) harness.Task {
+	return OnlyOnGOOS("darwin", task)
 }
 
 // IsCIEnv returns true if the current environment is a known ci system.
