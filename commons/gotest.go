@@ -7,11 +7,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/aexvir/harness/binary"
-
 	"github.com/fatih/color"
 
 	"github.com/aexvir/harness"
+	"github.com/aexvir/harness/binary"
 )
 
 // GoTest runs go test recursively.
@@ -19,6 +18,7 @@ import (
 //nolint:funlen,gocognit,gocyclo,cyclop,nestif // it's long but until usage patterns are clear it's better like this
 func GoTest(opts ...TestOpt) harness.Task {
 	conf := testconf{
+		race:          true,
 		coberturafile: "test-coverage.xml",
 		junitfile:     "test-results.xml",
 		filedumpfile:  "test-output.txt",
@@ -35,8 +35,12 @@ func GoTest(opts ...TestOpt) harness.Task {
 			target = fmt.Sprintf("./%s/...", *conf.target)
 		}
 
-		args := []string{"test", "-race", "-cover", target}
+		args := []string{"test", "-cover", target}
 		var env []string
+
+		if conf.race {
+			args = append(args, "-race")
+		}
 
 		if conf.integration {
 			// replace this with if !conf.integration { args = append(args, "-skip", "^TestIntegration" }
@@ -209,6 +213,7 @@ func computeCourtneyCoverage(ctx context.Context, coverfile string) error {
 type testconf struct {
 	target           *string
 	integration      bool
+	race             bool
 	courtneycoverage bool
 	filedump         bool
 	filedumpfile     string
@@ -227,6 +232,13 @@ type TestOpt func(c *testconf)
 func WithTarget(target *string) TestOpt {
 	return func(c *testconf) {
 		c.target = target
+	}
+}
+
+// WithRace controls if the test is executed with the -race flag.
+func WithRace(enabled bool) TestOpt {
+	return func(c *testconf) {
+		c.race = enabled
 	}
 }
 
