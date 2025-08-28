@@ -286,7 +286,7 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 				color.New(color.FgHiBlack).Sprint(
 					`   └ {{string . "prefix"}}{{counters . }}` +
 						` {{bar . "[" "=" ">" " " "]" }} {{percent . }}` +
-						` {{speed . "%s/s" }}{{string . "suffix"}}`,
+						` {{speed . }}{{string . "suffix"}}`,
 				),
 			),
 		).
