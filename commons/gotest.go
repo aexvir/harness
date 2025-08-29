@@ -97,7 +97,7 @@ func GoTest(opts ...TestOpt) harness.Task {
 
 			defer func() {
 				if err := computeCobertura(ctx, gocoverfile, conf.coberturafile); err != nil {
-					color.Red("failed to compute cobertura output: %s")
+					color.Red("failed to compute cobertura output: %s", err)
 				}
 			}()
 		}
