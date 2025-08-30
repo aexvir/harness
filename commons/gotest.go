@@ -138,13 +138,10 @@ func gotestfmt(ctx context.Context, testout []byte) error {
 // Command format: `gotestsum` [flags] [--] [go test flags]
 // The flags after "--" are appended to the internal `go test -json` command.
 //
-// However, `gotestsum` also provides `--raw-command` flag which allows you to specify the entire
-// command to run instead of using the built-in `go test -json`. When using `--raw-command`,
-// you would provide the custom `go test -json -something` command after "--".
-//
-// Since we already have the `go test -json` output from our test run, we can leverage this
-// `--raw-command` feature to skip any test execution and directly feed our existing output
-// into `gotestsum` for conversion to JUnit format by passing no-op command after "--".
+// Since we've already run `go test` ourselves, we rely on Go's test caching mechanism.
+// When `gotestsum` runs `go test -json` internally, it will use the cached test results
+// from our previous run, avoiding re-execution of the tests. This allows us to get
+// the JUnit format output without actually running the tests twice.
 func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
 	gts := binary.New(
 		"gotestsum",
@@ -163,9 +160,6 @@ func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
 		harness.WithArgs(
 			fmt.Sprintf("--junitfile=%s", junitfile),
 			"--hide-summary=all",
-			"--raw-command",
-			"--",
-			"cat",
 		),
 	)
 }
