@@ -133,6 +133,18 @@ func gotestfmt(ctx context.Context, testout []byte) error {
 // computeJunit translates the go test output to the junit format, so it can be parsed by
 // tools like gitlab.
 // https://docs.gitlab.com/ee/ci/testing/unit_test_reports.html
+//
+// `gotestsum` normally works by running `go test -json` internally and processing its output.
+// Command format: `gotestsum` [flags] [--] [go test flags]
+// The flags after "--" are appended to the internal `go test -json` command.
+//
+// However, `gotestsum` also provides `--raw-command` flag which allows you to specify the entire
+// command to run instead of using the built-in `go test -json`. When using `--raw-command`,
+// you would provide the custom `go test -json -something` command after "--".
+//
+// Since we already have the `go test -json` output from our test run, we can leverage this
+// `--raw-command` feature to skip any test execution and directly feed our existing output
+// into `gotestsum` for conversion to JUnit format by passing no-op command after "--".
 func computeJunit(ctx context.Context, testout []byte, junitfile string) error {
 	gts := binary.New(
 		"gotestsum",
