@@ -3,3 +3,4 @@ coverage.out
 quality-report.json
 test-coverage.xml
 test-results.xml
+.zed/

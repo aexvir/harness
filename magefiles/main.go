@@ -66,3 +66,11 @@ func Tidy(ctx context.Context) error {
 		commons.GoModTidy(),
 	)
 }
+
+// generate .zed/tasks.json for Zed editor integration
+func ZedTasks(ctx context.Context) error {
+	return h.Execute(
+		ctx,
+		commons.ZedTasks(),
+	)
+}
