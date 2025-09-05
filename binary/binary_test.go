@@ -7,22 +7,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-// mockOrigin is a test implementation of Origin interface
-type mockOrigin struct {
-	installCalled bool
-	installError  error
+// MockOrigin is a testify mock implementation of Origin interface
+type MockOrigin struct {
+	mock.Mock
 }
 
-func (m *mockOrigin) Install(template Template) error {
-	m.installCalled = true
-	return m.installError
+func (m *MockOrigin) Install(template Template) error {
+	args := m.Called(template)
+	return args.Error(0)
 }
 
 func TestNew(t *testing.T) {
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	
 	binary := New("test-cmd", "v1.0.0", mockOrig)
 	
@@ -49,7 +49,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewWithOptions(t *testing.T) {
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	
 	binary := New("test-cmd", "v1.0.0", mockOrig, 
 		WithVersionCmd("%s version"),
@@ -72,14 +72,14 @@ func TestNewWithOptions(t *testing.T) {
 }
 
 func TestBinary_Name(t *testing.T) {
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	binary := New("my-tool", "v1.0.0", mockOrig)
 	
 	assert.Equal(t, "my-tool", binary.Name())
 }
 
 func TestBinary_BinPath(t *testing.T) {
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	binary := New("my-tool", "v1.0.0", mockOrig)
 	
 	binPath := binary.BinPath()
@@ -98,7 +98,7 @@ func TestBinary_Ensure(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	
 	t.Run("error when version is empty", func(t *testing.T) {
-		mockOrig := &mockOrigin{}
+		mockOrig := &MockOrigin{}
 		binary := New("test-cmd", "", mockOrig)
 		
 		err := binary.Ensure()
@@ -107,20 +107,25 @@ func TestBinary_Ensure(t *testing.T) {
 	})
 	
 	t.Run("calls install when binary not installed", func(t *testing.T) {
-		mockOrig := &mockOrigin{}
+		mockOrig := &MockOrigin{}
 		binary := New("test-cmd", "v1.0.0", mockOrig)
 		// Change directory to tmpDir so binary won't be found
 		binary.directory = tmpDir
 		binary.template.Directory = tmpDir
 		binary.template.Cmd = filepath.Join(tmpDir, "test-cmd")
 		
+		// Set up mock expectation
+		mockOrig.On("Install", mock.AnythingOfType("Template")).Return(nil)
+		
 		err := binary.Ensure()
 		assert.NoError(t, err)
-		assert.True(t, mockOrig.installCalled)
+		
+		// Verify the mock was called as expected
+		mockOrig.AssertExpectations(t)
 	})
 	
 	t.Run("skips install when binary exists and version matches", func(t *testing.T) {
-		mockOrig := &mockOrigin{}
+		mockOrig := &MockOrigin{}
 		binary := New("test-cmd", "latest", mockOrig) // "latest" always matches
 		
 		// Create the binary file
@@ -134,17 +139,24 @@ func TestBinary_Ensure(t *testing.T) {
 		
 		err = binary.Ensure()
 		assert.NoError(t, err)
-		assert.False(t, mockOrig.installCalled) // Should not call install
+		
+		// Install should not have been called
+		mockOrig.AssertNotCalled(t, "Install")
 	})
 }
 
 func TestBinary_Install(t *testing.T) {
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	binary := New("test-cmd", "v1.0.0", mockOrig)
+	
+	// Set up mock expectation
+	mockOrig.On("Install", mock.AnythingOfType("Template")).Return(nil)
 	
 	err := binary.Install()
 	assert.NoError(t, err)
-	assert.True(t, mockOrig.installCalled)
+	
+	// Verify the mock was called as expected
+	mockOrig.AssertExpectations(t)
 }
 
 func TestBinary_isInstalled(t *testing.T) {
@@ -153,7 +165,7 @@ func TestBinary_isInstalled(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 	
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	binary := New("test-cmd", "v1.0.0", mockOrig)
 	binary.template.Cmd = filepath.Join(tmpDir, "test-cmd")
 	
@@ -170,7 +182,7 @@ func TestBinary_isInstalled(t *testing.T) {
 }
 
 func TestBinary_isExpectedVersion(t *testing.T) {
-	mockOrig := &mockOrigin{}
+	mockOrig := &MockOrigin{}
 	
 	t.Run("returns true for latest version", func(t *testing.T) {
 		binary := New("test-cmd", "latest", mockOrig)
