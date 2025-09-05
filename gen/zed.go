@@ -32,7 +32,6 @@ type ZedTask struct {
 // ZedTasksConfig holds the configuration for Zed task generation
 type ZedTasksConfig struct {
 	outputPath   string
-	mageCommand  string
 	extraTasks   []ZedTask
 	taskPrefix   string
 	generatedTag string
@@ -45,13 +44,6 @@ type ZedTasksOpt func(*ZedTasksConfig)
 func WithZedOutputPath(path string) ZedTasksOpt {
 	return func(c *ZedTasksConfig) {
 		c.outputPath = path
-	}
-}
-
-// WithZedMageCommand sets the mage command to use for parsing targets
-func WithZedMageCommand(cmd string) ZedTasksOpt {
-	return func(c *ZedTasksConfig) {
-		c.mageCommand = cmd
 	}
 }
 
@@ -73,9 +65,8 @@ func WithZedTaskPrefix(prefix string) ZedTasksOpt {
 func ZedTasks(opts ...ZedTasksOpt) harness.Task {
 	config := ZedTasksConfig{
 		outputPath:   ".zed/tasks.json",
-		mageCommand:  "mage",
 		taskPrefix:   "mage: ",
-		generatedTag: "harness-generated",
+		generatedTag: "harness",
 	}
 
 	for _, opt := range opts {
@@ -86,7 +77,7 @@ func ZedTasks(opts ...ZedTasksOpt) harness.Task {
 		harness.LogStep("Generating Zed tasks from mage targets")
 
 		// Get mage targets
-		targets, err := getMageTargets(config.mageCommand)
+		targets, err := getMageTargets("mage")
 		if err != nil {
 			return fmt.Errorf("failed to get mage targets: %w", err)
 		}
@@ -96,7 +87,7 @@ func ZedTasks(opts ...ZedTasksOpt) harness.Task {
 		for _, target := range targets {
 			task := ZedTask{
 				Label:       config.taskPrefix + target.Name,
-				Command:     config.mageCommand,
+				Command:     "mage",
 				Args:        []string{target.Name},
 				Reveal:      "always",
 				ShowSummary: true,
@@ -128,39 +119,7 @@ type MageTarget struct {
 
 // getMageTargets parses mage -l output to extract targets
 func getMageTargets(mageCmd string) ([]MageTarget, error) {
-	// Try to find mage if the default "mage" command fails
-	if mageCmd == "mage" {
-		// First try if mage is already in PATH
-		if _, err := exec.LookPath("mage"); err != nil {
-			// Try common locations
-			possiblePaths := []string{
-				"/home/runner/go/bin/mage",
-				"~/go/bin/mage",
-				"$GOPATH/bin/mage",
-			}
-
-			found := false
-			for _, path := range possiblePaths {
-				if _, err := os.Stat(path); err == nil {
-					mageCmd = path
-					found = true
-					break
-				}
-			}
-
-			// If still not found, use go run as fallback
-			if !found {
-				mageCmd = "go"
-			}
-		}
-	}
-
-	var cmd *exec.Cmd
-	if mageCmd == "go" {
-		cmd = exec.Command("go", "run", "github.com/magefile/mage@latest", "-l")
-	} else {
-		cmd = exec.Command(mageCmd, "-l")
-	}
+	cmd := exec.Command(mageCmd, "-l")
 
 	output, err := cmd.Output()
 	if err != nil {
