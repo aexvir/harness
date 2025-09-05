@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,14 +27,25 @@ type TaskRunner struct {
 
 // Cmd builds a command runner for a specific Executable.
 func Cmd(ctx context.Context, executable string, opts ...RunnerOpt) (*TaskRunner, error) {
-	cmd := exec.CommandContext(ctx, executable)
+	// Resolve relative executable paths to absolute paths to ensure they work correctly
+	// when the working directory is changed via WithDir
+	resolvedExecutable := executable
+	if !filepath.IsAbs(executable) {
+		abs, err := filepath.Abs(executable)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve executable path %q: %w", executable, err)
+		}
+		resolvedExecutable = abs
+	}
+
+	cmd := exec.CommandContext(ctx, resolvedExecutable)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
 	r := TaskRunner{
-		Executable: executable,
+		Executable: resolvedExecutable,
 		cmd:        cmd,
 	}
 
@@ -44,7 +56,7 @@ func Cmd(ctx context.Context, executable string, opts ...RunnerOpt) (*TaskRunner
 		}
 	}
 
-	cmd.Args = append([]string{executable}, r.Arguments...)
+	cmd.Args = append([]string{resolvedExecutable}, r.Arguments...)
 
 	return &r, nil
 }
@@ -138,7 +150,16 @@ func WithErrMsg(msg string) RunnerOpt {
 // WithDir sets the directory where the command should be run inside.
 func WithDir(dir string) RunnerOpt {
 	return func(r *TaskRunner) error {
-		r.cmd.Dir = dir
+		// Resolve relative directory paths to absolute paths
+		resolvedDir := dir
+		if !filepath.IsAbs(dir) {
+			abs, err := filepath.Abs(dir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve directory path %q: %w", dir, err)
+			}
+			resolvedDir = abs
+		}
+		r.cmd.Dir = resolvedDir
 		return nil
 	}
 }
