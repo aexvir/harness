@@ -274,6 +274,7 @@ func extract(compressed, destination string, processor func(path string) *string
 // progress wraps an io.Reader to display a progress bar when running in a terminal.
 // Returns the wrapped reader and a function to finalize the progress display.
 // The progress bar shows transfer speed and completion percentage.
+// Also reports OSC 9;4 progress for compatible terminals.
 func progress(reader io.Reader, size int64) (io.Reader, func()) {
 	if !isatty.IsTerminal(os.Stderr.Fd()) && !isatty.IsCygwinTerminal(os.Stderr.Fd()) {
 		return reader, func() {}
@@ -294,7 +295,67 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 		SetMaxWidth(100).
 		Start()
 
-	return bar.NewProxyReader(reader), func() { bar.Finish() }
+	// Create a custom progress reporter for binary operations
+	progressReporter := &progressbarOSCReporter{
+		bar:  bar,
+		size: size,
+	}
+
+	return progressReporter.NewProxyReader(reader), func() {
+		progressReporter.Finish()
+	}
+}
+
+// progressbarOSCReporter wraps a progress bar and adds OSC 9;4 reporting
+type progressbarOSCReporter struct {
+	bar  *pb.ProgressBar
+	size int64
+}
+
+// NewProxyReader creates a proxy reader that updates both the progress bar and OSC 9;4 progress
+func (p *progressbarOSCReporter) NewProxyReader(reader io.Reader) io.Reader {
+	return &oscProgressReader{
+		reader: p.bar.NewProxyReader(reader),
+		bar:    p.bar,
+		size:   p.size,
+	}
+}
+
+// Finish completes the progress reporting
+func (p *progressbarOSCReporter) Finish() {
+	// Report 100% completion via OSC 9;4
+	if size := p.size; size > 0 {
+		// Import the progress reporting from the main package
+		// Since we're in the binary package, we need to be careful about circular imports
+		// For now, we'll directly output the OSC sequence
+		fmt.Fprintf(os.Stderr, "\033]9;4;2;100\033\\")
+	}
+	p.bar.Finish()
+	// Clear progress after completion
+	fmt.Fprintf(os.Stderr, "\033]9;4;0;0\033\\")
+}
+
+// oscProgressReader wraps an io.Reader to report OSC 9;4 progress
+type oscProgressReader struct {
+	reader io.Reader
+	bar    *pb.ProgressBar
+	size   int64
+}
+
+func (r *oscProgressReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+
+	// Report OSC 9;4 progress based on current progress bar state
+	if r.size > 0 && r.bar != nil {
+		current := r.bar.Current()
+		percentage := int((current * 100) / r.size)
+		if percentage > 100 {
+			percentage = 100
+		}
+		fmt.Fprintf(os.Stderr, "\033]9;4;2;%d\033\\", percentage)
+	}
+
+	return n, err
 }
 
 func logstep(text string) {

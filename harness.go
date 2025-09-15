@@ -33,24 +33,40 @@ func New(opts ...Option) *Harness {
 // Execute a list of tasks inside the harness.
 // Every task inside the harness is run sequentially, showing a consistent output where
 // the task status and timing info are clearly visible.
+// Progress is reported using OSC 9;4 escape sequences for compatible terminals.
 func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	var errs []string
 	start := time.Now()
+	totalTasks := len(tasks)
 
 	fmt.Printf("\n")
 
+	// Show indeterminate progress at start
+	if IsProgressEnabled() {
+		ShowIndeterminate()
+	}
+
 	if err := h.PreExecHook(ctx); err != nil {
+		ClearProgress()
 		return fmt.Errorf("failed to initialize ci harness: %s", err.Error())
 	}
 
 	for i := range tasks {
 		task := tasks[i]
+
+		// Report progress: calculate percentage based on completed tasks
+		if IsProgressEnabled() && totalTasks > 0 {
+			progress := (i * 100) / totalTasks
+			ShowProgress(progress)
+		}
+
 		if err := task(ctx); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
 
 	if err := h.PostExecHook(ctx); err != nil {
+		ClearProgress()
 		return fmt.Errorf("failed to run post exec hook: %s", err.Error())
 	}
 
@@ -58,6 +74,7 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	color.New(color.FgHiBlack).Printf("------------------------\n\n")
 
 	if len(errs) > 0 {
+		ClearProgress()
 		color.Red(" ✘ finished with errors after %s", elapsed)
 		for _, errmsg := range errs {
 			color.Red("   • %s", errmsg)
@@ -66,7 +83,15 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 		return fmt.Errorf("task finished with errors")
 	}
 
+	// Show 100% progress before clearing
+	if IsProgressEnabled() {
+		ShowProgress(100)
+	}
+
 	color.Green(" ✔ all good after %s\n\n", elapsed)
+
+	// Clear progress when done
+	ClearProgress()
 	return nil
 }
 
@@ -93,5 +118,13 @@ type Option func(h *Harness)
 func WithPreExecFunc(hook Task) Option {
 	return func(h *Harness) {
 		h.PreExecHook = hook
+	}
+}
+
+// WithProgressReporting enables or disables OSC 9;4 progress reporting.
+// When enabled, compatible terminals can display progress in taskbars or title bars.
+func WithProgressReporting(enabled bool) Option {
+	return func(h *Harness) {
+		SetProgressEnabled(enabled)
 	}
 }
