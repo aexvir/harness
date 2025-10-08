@@ -12,6 +12,8 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
+
+	"github.com/aexvir/harness"
 )
 
 // Origin defines the interface for provisioning binaries from different sources.
@@ -193,10 +195,10 @@ func download(url, destination string) (err error) {
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red("     ✘ %s", elapsed)
+			color.Red("     %s %s", harness.Symbols.Error, elapsed)
 			return
 		}
-		color.Green("     ✔ %s", elapsed)
+		color.Green("     %s %s", harness.Symbols.Success, elapsed)
 	}()
 
 	if _, err := os.Stat(destination); err == nil {
@@ -239,10 +241,10 @@ func extract(compressed, destination string, processor func(path string) *string
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red("     ✘ %s", elapsed)
+			color.Red("     %s %s", harness.Symbols.Error, elapsed)
 			return
 		}
-		color.Green("     ✔ %s", elapsed)
+		color.Green("     %s %s", harness.Symbols.Success, elapsed)
 	}()
 
 	file, err := os.Open(compressed)
@@ -284,7 +286,7 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 		SetTemplate(
 			pb.ProgressBarTemplate(
 				color.New(color.FgHiBlack).Sprint(
-					`   └ {{string . "prefix"}}{{counters . }}` +
+					`   ` + harness.Symbols.Detail + ` {{string . "prefix"}}{{counters . }}` +
 						` {{bar . "[" "=" ">" " " "]" }} {{percent . }}` +
 						` {{speed . "%s/s" }}{{string . "suffix"}}`,
 				),
@@ -299,14 +301,14 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 
 func logstep(text string) {
 	fmt.Println(
-		color.BlueString(" •"),
+		color.BlueString(" %s", harness.Symbols.Dot),
 		color.New(color.FgHiBlack).Sprint(text),
 	)
 }
 
 func logdetail(text string) {
 	fmt.Println(
-		color.New(color.FgHiBlack).Sprint("   └"),
+		color.New(color.FgHiBlack).Sprintf("   %s", harness.Symbols.Detail),
 		color.New(color.FgHiBlack).Sprint(text),
 	)
 }

@@ -58,15 +58,15 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	color.New(color.FgHiBlack).Printf("------------------------\n\n")
 
 	if len(errs) > 0 {
-		color.Red(" ✘ finished with errors after %s", elapsed)
+		color.Red(" %s finished with errors after %s", Symbols.Error, elapsed)
 		for _, errmsg := range errs {
-			color.Red("   • %s", errmsg)
+			color.Red("   %s %s", Symbols.Dot, errmsg)
 		}
 		fmt.Printf("\n")
 		return fmt.Errorf("task finished with errors")
 	}
 
-	color.Green(" ✔ all good after %s\n\n", elapsed)
+	color.Green(" %s all good after %s\n\n", Symbols.Success, elapsed)
 	return nil
 }
 
@@ -76,7 +76,7 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 // a Harness.Exec block.
 func LogStep(text string) {
 	fmt.Println(
-		color.MagentaString(" ⌘"),
+		color.MagentaString(" %s", Symbols.Command),
 		color.New(color.Bold).Sprint(text),
 	)
 }
