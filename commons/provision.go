@@ -22,10 +22,10 @@ func Provision(binaries ...*binary.Binary) harness.Task {
 		defer func() {
 			elapsed := time.Since(start).Round(time.Millisecond)
 			if err != nil {
-				color.Red(" ✘ %s\n\n", elapsed)
+				color.Red(" %s %s\n\n", harness.Symbols.Error, elapsed)
 				return
 			}
-			color.Green(" ✔ %s\n\n", elapsed)
+			color.Green(" %s %s\n\n", harness.Symbols.Success, elapsed)
 		}()
 
 		names := make([]string, 0, len(binaries))
@@ -42,7 +42,7 @@ func Provision(binaries ...*binary.Binary) harness.Task {
 
 		if len(errs) > 0 {
 			for _, errmsg := range errs {
-				color.Red(" • %s", errmsg)
+				color.Red(" %s %s", harness.Symbols.Dot, errmsg)
 			}
 			return fmt.Errorf("provisioning failed")
 		}

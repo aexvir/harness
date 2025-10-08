@@ -57,10 +57,10 @@ func (r *TaskRunner) Exec() error {
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red(" ✘ %s\n\n", elapsed)
+			color.Red(" %s %s\n\n", Symbols.Error, elapsed)
 			return
 		}
-		color.Green(" ✔ %s\n\n", elapsed)
+		color.Green(" %s %s\n\n", Symbols.Success, elapsed)
 	}()
 
 	if !r.quiet {
