@@ -12,7 +12,7 @@ import (
 const (
 	pkgName             = "github.com/aexvir/harness"
 	commitsarVersion    = "0.20.1"
-	golangcilintVersion = "v1.63.3"
+	golangcilintVersion = "2.10.1"
 )
 
 var h = harness.New(

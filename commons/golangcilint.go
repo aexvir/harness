@@ -29,7 +29,12 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 		gci := binary.New(
 			"golangci-lint",
 			conf.version,
-			binary.GoBinary("github.com/golangci/golangci-lint/cmd/golangci-lint"),
+			binary.RemoteArchiveDownload(
+				"https://github.com/golangci/golangci-lint/releases/download/v{{.Version}}/golangci-lint-{{.Version}}-{{.GOOS}}-{{.GOARCH}}.tar.gz",
+				map[string]string{
+					"golangci-lint-{{.Version}}-{{.GOOS}}-{{.GOARCH}}/golangci-lint": "golangci-lint",
+				},
+			),
 		)
 
 		if err := gci.Ensure(); err != nil {
