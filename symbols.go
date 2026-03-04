@@ -17,7 +17,7 @@ type statusSymbols struct {
 	Error   string // ✘ or [ERR]
 	Command string // ⌘ or >
 	Dot     string // • or o
-	Detail  string // └ or --
+	Detail  string // ╰ or --
 }
 
 // defaultSymbols returns Unicode symbols for modern terminals.
@@ -27,7 +27,7 @@ func defaultSymbols() statusSymbols {
 		Error:   "✘",
 		Command: "⌘",
 		Dot:     "•",
-		Detail:  "└",
+		Detail:  "╰",
 	}
 }
 
