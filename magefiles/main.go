@@ -66,3 +66,22 @@ func Tidy(ctx context.Context) error {
 		commons.GoModTidy(),
 	)
 }
+
+// generate .zed/tasks.json for Zed editor integration
+func ZedTasks(ctx context.Context) error {
+	return h.Execute(
+		ctx,
+		commons.GenerateZedTasks(),
+	)
+}
+
+// generate runs go generate ./... and then generates zed tasks
+func Generate(ctx context.Context) error {
+	return h.Execute(
+		ctx,
+		func(ctx context.Context) error {
+			return harness.Run(ctx, "go", harness.WithArgs("generate", "./..."))
+		},
+		commons.GenerateZedTasks(),
+	)
+}
