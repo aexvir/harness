@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,6 +27,17 @@ type TaskRunner struct {
 
 // Cmd builds a command runner for a specific Executable.
 func Cmd(ctx context.Context, executable string, opts ...RunnerOpt) (*TaskRunner, error) {
+	// always resolve binary to their absolute path
+	if strings.Contains(executable, "/") {
+		if !filepath.IsAbs(executable) {
+			abs, err := filepath.Abs(executable)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve executable path %q: %w", executable, err)
+			}
+			executable = abs
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, executable)
 
 	cmd.Stdout = os.Stdout
@@ -64,7 +76,10 @@ func (r *TaskRunner) Exec() error {
 	}()
 
 	if !r.quiet {
-		LogStep(fmt.Sprint(r.Executable, " ", strings.Join(r.Arguments, " ")))
+		LogStep(fmt.Sprint(filepath.Base(r.Executable), " ", strings.Join(r.Arguments, " ")))
+		if filepath.IsAbs(r.Executable) {
+			color.New(color.FgHiBlack).Printf("   └ from path %s\n", r.Executable)
+		}
 	}
 
 	err = r.cmd.Run()
