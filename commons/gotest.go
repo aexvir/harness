@@ -29,29 +29,11 @@ func GoTest(opts ...TestOpt) harness.Task {
 	}
 
 	return func(ctx context.Context) error {
-		target := "./..."
-
-		if conf.target != nil {
-			target = fmt.Sprintf("./%s/...", *conf.target)
-		}
-
-		args := []string{"test", "-cover", target}
-		var env []string
-
-		if conf.race {
-			args = append(args, "-race")
-		}
-
-		if conf.integration {
-			// replace this with if !conf.integration { args = append(args, "-skip", "^TestIntegration" }
-			args = append(args, "-run", "^TestIntegration")
-			env = append(env, "TEST_TARGET=integration")
-		}
+		args, env := buildGoTestArgs(conf)
 
 		output := io.Writer(os.Stdout)
 
 		if conf.cifriendlyout || conf.junit {
-			args = append(args, "-json")
 			iobuf := new(bytes.Buffer)
 			output = iobuf
 
@@ -87,7 +69,6 @@ func GoTest(opts ...TestOpt) harness.Task {
 
 		if conf.cobertura {
 			gocoverfile := "coverage.out"
-			args = append(args, "-coverprofile", gocoverfile)
 
 			if conf.courtneycoverage {
 				if err := computeCourtneyCoverage(ctx, gocoverfile); err != nil {
@@ -114,6 +95,36 @@ func GoTest(opts ...TestOpt) harness.Task {
 // It's a shortcut for GoTest(WithIntegrationTest()).
 func GoIntegrationTest(opts ...TestOpt) harness.Task {
 	return GoTest(append(opts, WithIntegrationTest())...)
+}
+
+// buildGoTestArgs constructs the argument list and environment variables for the go test command.
+func buildGoTestArgs(conf testconf) (args []string, env []string) {
+	target := "./..."
+
+	if conf.target != nil {
+		target = fmt.Sprintf("./%s/...", *conf.target)
+	}
+
+	args = []string{"test", "-cover", target}
+
+	if conf.race {
+		args = append(args, "-race")
+	}
+
+	if conf.integration {
+		args = append(args, "-run", "^TestIntegration")
+		env = append(env, "TEST_TARGET=integration")
+	}
+
+	if conf.cifriendlyout || conf.junit {
+		args = append(args, "-json")
+	}
+
+	if conf.cobertura {
+		args = append(args, "-coverprofile", "coverage.out")
+	}
+
+	return args, env
 }
 
 func gotestfmt(ctx context.Context, testout []byte) error {

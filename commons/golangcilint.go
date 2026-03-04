@@ -36,23 +36,16 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 			return fmt.Errorf("failed to provision golangci-lint binary: %w", err)
 		}
 
-		args := []string{
-			"run",
-			"--max-same-issues", "0",
-			"--max-issues-per-linter", "0",
-		}
+		args := buildGolangCILintArgs(conf)
 
 		var err error
 
 		if conf.codeclimate {
-			args = append(args, "--out-format", fmt.Sprintf("code-climate:%s", conf.codeclimatefile))
 			defer func() {
 				if err != nil {
-					// print found issues directly from the codeclimate file to avoid re-running golangci-lint with a different format
 					output, _ := os.ReadFile(conf.codeclimatefile)
-
-					var issues []linterissue
-					if jsonerr := json.NewDecoder(bytes.NewBuffer(output)).Decode(&issues); jsonerr != nil {
+					issues, jsonerr := parseLinterIssues(output)
+					if jsonerr != nil {
 						color.Red("failed to parse codeclimate output")
 					}
 
@@ -72,6 +65,30 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 
 		return err
 	}
+}
+
+// buildGolangCILintArgs constructs the argument list for the golangci-lint command.
+func buildGolangCILintArgs(conf golangcilintconf) []string {
+	args := []string{
+		"run",
+		"--max-same-issues", "0",
+		"--max-issues-per-linter", "0",
+	}
+
+	if conf.codeclimate {
+		args = append(args, "--out-format", fmt.Sprintf("code-climate:%s", conf.codeclimatefile))
+	}
+
+	return args
+}
+
+// parseLinterIssues parses a codeclimate JSON report into a slice of linter issues.
+func parseLinterIssues(data []byte) ([]linterissue, error) {
+	var issues []linterissue
+	if err := json.NewDecoder(bytes.NewBuffer(data)).Decode(&issues); err != nil {
+		return nil, err
+	}
+	return issues, nil
 }
 
 type golangcilintconf struct {

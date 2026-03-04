@@ -201,11 +201,7 @@ func download(url, destination string) (err error) {
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
-		if err != nil {
-			color.Red("     %s %s", harness.Symbols.Error, elapsed)
-			return
-		}
-		color.Green("     %s %s", harness.Symbols.Success, elapsed)
+		logstatus(elapsed.String(), err)
 	}()
 
 	if _, err := os.Stat(destination); err == nil {
@@ -217,6 +213,10 @@ func download(url, destination string) (err error) {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected response when downloading archive: http%d", resp.StatusCode)
+	}
 
 	data, finish := progress(resp.Body, resp.ContentLength)
 	defer finish()
@@ -247,11 +247,7 @@ func extract(compressed, destination string, processor func(path string) *string
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
-		if err != nil {
-			color.Red("     %s %s", harness.Symbols.Error, elapsed)
-			return
-		}
-		color.Green("     %s %s", harness.Symbols.Success, elapsed)
+		logstatus(elapsed.String(), err)
 	}()
 
 	file, err := os.Open(compressed)
@@ -290,6 +286,7 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 
 	bar := pb.
 		New64(size).
+		SetWriter(output).
 		SetTemplate(
 			pb.ProgressBarTemplate(
 				color.New(color.FgHiBlack).Sprint(
@@ -304,18 +301,4 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 		Start()
 
 	return bar.NewProxyReader(reader), func() { bar.Finish() }
-}
-
-func logstep(text string) {
-	fmt.Println(
-		color.BlueString(" %s", harness.Symbols.Dot),
-		color.New(color.FgHiBlack).Sprint(text),
-	)
-}
-
-func logdetail(text string) {
-	fmt.Println(
-		color.New(color.FgHiBlack).Sprintf("   %s", harness.Symbols.Detail),
-		color.New(color.FgHiBlack).Sprint(text),
-	)
 }

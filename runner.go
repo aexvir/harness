@@ -116,7 +116,7 @@ func WithEnv(vars ...string) RunnerOpt {
 	return func(r *TaskRunner) error {
 		r.cmd.Env = os.Environ()
 		for _, vrb := range vars {
-			items := strings.Split(vrb, "=")
+			items := strings.SplitN(vrb, "=", 2)
 			if len(items) != 2 {
 				return fmt.Errorf("invalid env format; %s doesn't match NAME=value expectation", vrb)
 			}
