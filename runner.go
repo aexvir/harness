@@ -78,7 +78,7 @@ func (r *TaskRunner) Exec() error {
 	if !r.quiet {
 		LogStep(fmt.Sprint(filepath.Base(r.Executable), " ", strings.Join(r.Arguments, " ")))
 		if filepath.IsAbs(r.Executable) {
-			color.New(color.FgHiBlack).Printf("   └ from path %s\n", r.Executable)
+			color.New(color.FgHiBlack).Printf("   %s from path %s\n", Symbols.Detail, r.Executable)
 		}
 	}
 
