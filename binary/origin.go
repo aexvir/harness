@@ -181,7 +181,14 @@ func (o *gopkg) Install(template Template) error {
 		return fmt.Errorf("unable to install executable: %w", err)
 	}
 
-	// rename if name is different
+	// rename if binary name is different from template
+	if currentBinaryName := filepath.Base(o.pkg); currentBinaryName != template.Name {
+		logdetail("renaming binary from " + currentBinaryName + " to " + template.Name)
+		return os.Rename(
+			fmt.Sprintf("%s/%s", path, currentBinaryName),
+			fmt.Sprintf("%s/%s", path, template.Name),
+		)
+	}
 
 	return nil
 }
