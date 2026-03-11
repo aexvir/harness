@@ -57,7 +57,7 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 					}
 
 					for _, issue := range issues {
-						color.Red("  • %s:%d        %s", issue.Location.Path, issue.Location.Lines.Begin, issue.Description)
+						color.Red("  %s %s:%d        %s", harness.Symbols.Dot, issue.Location.Path, issue.Location.Lines.Begin, issue.Description)
 					}
 				}
 			}()

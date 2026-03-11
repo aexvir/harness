@@ -6,10 +6,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/fatih/color"
+
+	"github.com/aexvir/harness/internal"
 )
 
 // TaskRunner holds the metadata for a specific command.
@@ -26,6 +29,17 @@ type TaskRunner struct {
 
 // Cmd builds a command runner for a specific Executable.
 func Cmd(ctx context.Context, executable string, opts ...RunnerOpt) (*TaskRunner, error) {
+	// always resolve binary to their absolute path
+	if strings.Contains(executable, "/") {
+		if !filepath.IsAbs(executable) {
+			abs, err := filepath.Abs(executable)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve executable path %q: %w", executable, err)
+			}
+			executable = abs
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, executable)
 
 	cmd.Stdout = os.Stdout
@@ -57,27 +71,32 @@ func (r *TaskRunner) Exec() error {
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red(" ✘ %s\n\n", elapsed)
+			internal.LogError(elapsed.String())
+			internal.LogBlank()
 			return
 		}
-		color.Green(" ✔ %s\n\n", elapsed)
+		internal.LogSuccess(elapsed.String())
+		internal.LogBlank()
 	}()
 
 	if !r.quiet {
-		LogStep(fmt.Sprint(r.Executable, " ", strings.Join(r.Arguments, " ")))
+		LogStep(fmt.Sprint(filepath.Base(r.Executable), " ", strings.Join(r.Arguments, " ")))
+		if filepath.IsAbs(r.Executable) {
+			internal.LogDetail(fmt.Sprintf("from path %s", r.Executable))
+		}
 	}
 
 	err = r.cmd.Run()
 
 	if !r.allowerr && err != nil {
 		if !r.quiet && r.errmsg != "" {
-			color.Red(r.errmsg)
+			internal.LogMessage(color.FgRed, r.errmsg)
 		}
 		return fmt.Errorf("%s: %w", r.Executable, err)
 	}
 
 	if !r.quiet && r.okmsg != "" {
-		color.Green(r.okmsg)
+		internal.LogMessage(color.FgGreen, r.okmsg)
 	}
 
 	return nil
@@ -101,7 +120,7 @@ func WithEnv(vars ...string) RunnerOpt {
 	return func(r *TaskRunner) error {
 		r.cmd.Env = os.Environ()
 		for _, vrb := range vars {
-			items := strings.Split(vrb, "=")
+			items := strings.SplitN(vrb, "=", 2)
 			if len(items) != 2 {
 				return fmt.Errorf("invalid env format; %s doesn't match NAME=value expectation", vrb)
 			}

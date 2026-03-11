@@ -1,8 +1,10 @@
 package commons
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -67,6 +69,16 @@ func GoTest(opts ...TestOpt) harness.Task {
 				if conf.junit {
 					if err := computeJunit(ctx, jsonoutput, conf.junitfile); err != nil {
 						color.Red("failed to compute junit output: %s", err.Error())
+					}
+				}
+
+				if tests, passed, skipped, failed, err := computeTestSummaryFromJSON(jsonoutput); err != nil {
+					color.Red("failed to compute test summary: %s", err.Error())
+				} else {
+					line := fmt.Sprintf("%d tests run, %d passed, %d skipped, %d failed", tests, passed, skipped, failed)
+					fmt.Println(line)
+					if err := writeGitHubStepSummary(line); err != nil {
+						color.Red("failed to write github step summary: %s", err.Error())
 					}
 				}
 			}()
@@ -214,6 +226,72 @@ func computeCourtneyCoverage(ctx context.Context, coverfile string) error {
 	}
 
 	return harness.Run(ctx, ctny.BinPath(), harness.WithArgs("-l", coverfile))
+}
+
+// computeTestSummaryFromJSON counts the number of tests, passed, skipped, and failed tests from the test output.
+func computeTestSummaryFromJSON(testout []byte) (tests, passed, skipped, failed int, err error) {
+	scanner := bufio.NewScanner(bytes.NewReader(testout))
+
+	type testevt struct {
+		// simplified representation of json log from the go test runner
+		Action string `json:"Action"`
+		Test   string `json:"Test"`
+	}
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(bytes.TrimSpace(line)) == 0 {
+			// skip empty lines
+			continue
+		}
+
+		var event testevt
+		if err := json.Unmarshal(line, &event); err != nil {
+			// skip non event lines
+			continue
+		}
+
+		if event.Test == "" {
+			// package level logs don't have the "Test" attribute
+			continue
+		}
+
+		switch event.Action {
+		case "pass":
+			tests++
+			passed++
+		case "skip":
+			tests++
+			skipped++
+		case "fail":
+			tests++
+			failed++
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("error reading test output: %w", err)
+	}
+
+	return tests, passed, skipped, failed, nil
+}
+
+// writeGitHubStepSummary writes the specified line to the GitHub step summary file.
+func writeGitHubStepSummary(line string) error {
+	summary := os.Getenv("GITHUB_STEP_SUMMARY")
+	if summary == "" {
+		return nil
+	}
+
+	f, err := os.OpenFile(summary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = fmt.Fprintf(f, "## Test summary\n\n- %s\n", line)
+
+	return err
 }
 
 type testconf struct {
