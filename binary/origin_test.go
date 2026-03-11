@@ -1,7 +1,9 @@
 package binary
 
 import (
+	"bytes"
 	"embed"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/aexvir/harness/internal"
 )
 
 //go:generate go run testdata/gen/main.go
@@ -293,6 +297,36 @@ func TestRemoteArchiveDownloadOrigin(t *testing.T) {
 
 			assert.FileExists(t, filepath.Join(dir, "renamed"))
 			assert.NoFileExists(t, filepath.Join(dir, "util"))
+		},
+	)
+}
+
+func TestProgressDisablesOnNonTerminalOutput(t *testing.T) {
+	out := internal.Output
+	t.Cleanup(func() { SetOutput(out) })
+
+	t.Run("io.Discard",
+		func(t *testing.T) {
+			SetOutput(io.Discard)
+
+			src := bytes.NewBufferString("payload")
+			got, finish := progress(src, int64(src.Len()))
+			defer finish()
+
+			assert.True(t, got == src, "expected progress to be disabled for non-terminal output")
+		},
+	)
+
+	t.Run("bytes.Buffer",
+		func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			SetOutput(buf)
+
+			src := bytes.NewBufferString("payload")
+			got, finish := progress(src, int64(src.Len()))
+			defer finish()
+
+			assert.True(t, got == src, "expected progress to be disabled for non-terminal output")
 		},
 	)
 }

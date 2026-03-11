@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+
+	"github.com/aexvir/harness/internal"
 )
 
 // TaskRunner holds the metadata for a specific command.
@@ -69,16 +71,18 @@ func (r *TaskRunner) Exec() error {
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		if err != nil {
-			color.Red(" %s %s\n\n", Symbols.Error, elapsed)
+			internal.LogError(elapsed.String())
+			internal.LogBlank()
 			return
 		}
-		color.Green(" %s %s\n\n", Symbols.Success, elapsed)
+		internal.LogSuccess(elapsed.String())
+		internal.LogBlank()
 	}()
 
 	if !r.quiet {
 		LogStep(fmt.Sprint(filepath.Base(r.Executable), " ", strings.Join(r.Arguments, " ")))
 		if filepath.IsAbs(r.Executable) {
-			color.New(color.FgHiBlack).Printf("   └ from path %s\n", r.Executable)
+			internal.LogDetail(fmt.Sprintf("from path %s", r.Executable))
 		}
 	}
 
@@ -86,13 +90,13 @@ func (r *TaskRunner) Exec() error {
 
 	if !r.allowerr && err != nil {
 		if !r.quiet && r.errmsg != "" {
-			color.Red(r.errmsg)
+			internal.LogMessage(color.FgRed, r.errmsg)
 		}
 		return fmt.Errorf("%s: %w", r.Executable, err)
 	}
 
 	if !r.quiet && r.okmsg != "" {
-		color.Green(r.okmsg)
+		internal.LogMessage(color.FgGreen, r.okmsg)
 	}
 
 	return nil
@@ -116,7 +120,7 @@ func WithEnv(vars ...string) RunnerOpt {
 	return func(r *TaskRunner) error {
 		r.cmd.Env = os.Environ()
 		for _, vrb := range vars {
-			items := strings.Split(vrb, "=")
+			items := strings.SplitN(vrb, "=", 2)
 			if len(items) != 2 {
 				return fmt.Errorf("invalid env format; %s doesn't match NAME=value expectation", vrb)
 			}
