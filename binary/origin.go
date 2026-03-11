@@ -13,7 +13,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
 
-	"github.com/aexvir/harness"
+	"github.com/aexvir/harness/internal"
 )
 
 // Origin defines the interface for provisioning binaries from different sources.
@@ -49,7 +49,7 @@ func (r *remotebin) Install(template Template) error {
 		return fmt.Errorf("failed to resolve URL: %w", err)
 	}
 
-	logstep(fmt.Sprintf("downloading from %s", url))
+	internal.LogStep(fmt.Sprintf("downloading from %s", url))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -139,7 +139,7 @@ func (r *remotearchive) Install(template Template) error {
 
 			// otherwise only extract files that are present in the map
 			if replacement, ok := mapping[path]; ok {
-				logdetail(fmt.Sprintf("  resolved %s to %s", path, replacement))
+				internal.LogDetail(fmt.Sprintf("  resolved %s to %s", path, replacement))
 				return &replacement
 			}
 			return nil
@@ -176,14 +176,14 @@ func (o *gopkg) Install(template Template) error {
 	cmd := exec.Command("go", "install", o.pkg+"@"+template.Version)
 	cmd.Env = append(os.Environ(), "GOBIN="+path)
 	installcmd := fmt.Sprintf("GOBIN=%s go install %s@%s", path, o.pkg, template.Version)
-	logdetail(fmt.Sprintf("running %s", installcmd))
+	internal.LogDetail(fmt.Sprintf("running %s", installcmd))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("unable to install executable: %w", err)
 	}
 
 	// rename if binary name is different from template
 	if currentBinaryName := filepath.Base(o.pkg); currentBinaryName != template.Name {
-		logdetail("renaming binary from " + currentBinaryName + " to " + template.Name)
+		internal.LogDetail("renaming binary from " + currentBinaryName + " to " + template.Name)
 		return os.Rename(
 			fmt.Sprintf("%s/%s", path, currentBinaryName),
 			fmt.Sprintf("%s/%s", path, template.Name),
@@ -196,16 +196,12 @@ func (o *gopkg) Install(template Template) error {
 // download downloads a file from a URL to a local destination.
 // If the destination file already exists, the download is skipped.
 func download(url, destination string) (err error) {
-	logdetail(fmt.Sprintf("downloading %s to %s", url, destination))
+	internal.LogDetail(fmt.Sprintf("downloading %s to %s", url, destination))
 
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
-		if err != nil {
-			color.Red("     %s %s", harness.Symbols.Error, elapsed)
-			return
-		}
-		color.Green("     %s %s", harness.Symbols.Success, elapsed)
+		internal.LogStatus(elapsed.String(), err)
 	}()
 
 	if _, err := os.Stat(destination); err == nil {
@@ -217,6 +213,10 @@ func download(url, destination string) (err error) {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected response when downloading archive: http%d", resp.StatusCode)
+	}
 
 	data, finish := progress(resp.Body, resp.ContentLength)
 	defer finish()
@@ -242,16 +242,12 @@ func download(url, destination string) (err error) {
 // Files are extracted with executable permissions (0755).
 // The source archive is removed after successful extraction.
 func extract(compressed, destination string, processor func(path string) *string) (err error) {
-	logdetail(fmt.Sprintf("extracting %s", compressed))
+	internal.LogDetail(fmt.Sprintf("extracting %s", compressed))
 
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start).Round(time.Millisecond)
-		if err != nil {
-			color.Red("     %s %s", harness.Symbols.Error, elapsed)
-			return
-		}
-		color.Green("     %s %s", harness.Symbols.Success, elapsed)
+		internal.LogStatus(elapsed.String(), err)
 	}()
 
 	file, err := os.Open(compressed)
@@ -284,16 +280,17 @@ func extract(compressed, destination string, processor func(path string) *string
 // Returns the wrapped reader and a function to finalize the progress display.
 // The progress bar shows transfer speed and completion percentage.
 func progress(reader io.Reader, size int64) (io.Reader, func()) {
-	if !isatty.IsTerminal(os.Stderr.Fd()) && !isatty.IsCygwinTerminal(os.Stderr.Fd()) {
+	if !isTerminalWriter(internal.Output) {
 		return reader, func() {}
 	}
 
 	bar := pb.
 		New64(size).
+		SetWriter(internal.Output).
 		SetTemplate(
 			pb.ProgressBarTemplate(
 				color.New(color.FgHiBlack).Sprint(
-					`   ` + harness.Symbols.Detail + ` {{string . "prefix"}}{{counters . }}` +
+					`   ` + internal.Symbols.Detail + ` {{string . "prefix"}}{{counters . }}` +
 						` {{bar . "[" "=" ">" " " "]" }} {{percent . }}` +
 						` {{speed . "%s/s" }}{{string . "suffix"}}`,
 				),
@@ -306,16 +303,11 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 	return bar.NewProxyReader(reader), func() { bar.Finish() }
 }
 
-func logstep(text string) {
-	fmt.Println(
-		color.BlueString(" %s", harness.Symbols.Dot),
-		color.New(color.FgHiBlack).Sprint(text),
-	)
-}
-
-func logdetail(text string) {
-	fmt.Println(
-		color.New(color.FgHiBlack).Sprintf("   %s", harness.Symbols.Detail),
-		color.New(color.FgHiBlack).Sprint(text),
-	)
+func isTerminalWriter(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	fd := file.Fd()
+	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
