@@ -95,3 +95,11 @@ func WithPreExecFunc(hook Task) Option {
 		h.PreExecHook = hook
 	}
 }
+
+// WithPostExecFunc allows specifying a task that will be run every execution, after the
+// specific execution tasks are run.
+func WithPostExecFunc(hook Task) Option {
+	return func(h *Harness) {
+		h.PostExecHook = hook
+	}
+}
