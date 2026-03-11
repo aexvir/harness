@@ -126,6 +126,11 @@ func getMageTargets(mageCmd string) ([]MageTarget, error) {
 		return nil, fmt.Errorf("failed to run %s -l: %w", mageCmd, err)
 	}
 
+	return parseMageTargets(output), nil
+}
+
+// parseMageTargets parses the output of `mage -l` and returns the list of targets.
+func parseMageTargets(output []byte) []MageTarget {
 	var targets []MageTarget
 	lines := strings.Split(string(output), "\n")
 
@@ -156,7 +161,7 @@ func getMageTargets(mageCmd string) ([]MageTarget, error) {
 		}
 	}
 
-	return targets, nil
+	return targets
 }
 
 // writeZedTasks writes tasks to the Zed tasks.json file, merging with existing content
