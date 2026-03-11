@@ -218,6 +218,10 @@ func download(url, destination string) (err error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected response when downloading archive: http%d", resp.StatusCode)
+	}
+
 	data, finish := progress(resp.Body, resp.ContentLength)
 	defer finish()
 
