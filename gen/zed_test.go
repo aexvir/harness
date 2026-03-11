@@ -100,8 +100,8 @@ Aliases:
 func TestBuildManagedSection(t *testing.T) {
 	t.Run("single task",
 		func(t *testing.T) {
-			tasks := []ZedTask{
-				{Label: "mage test", Command: "mage test"},
+			tasks := []map[string]any{
+				{"label": "mage test", "command": "mage test"},
 			}
 
 			section, err := buildManagedSection(tasks)
@@ -111,15 +111,14 @@ func TestBuildManagedSection(t *testing.T) {
 			assert.Contains(t, section, harnessMarkerEnd)
 			assert.Contains(t, section, `"label": "mage test"`)
 			assert.Contains(t, section, `"command": "mage test"`)
-			assert.NotContains(t, section, `"args"`)
 		},
 	)
 
 	t.Run("multiple tasks with comma separation",
 		func(t *testing.T) {
-			tasks := []ZedTask{
-				{Label: "mage format", Command: "mage format"},
-				{Label: "mage lint", Command: "mage lint"},
+			tasks := []map[string]any{
+				{"label": "mage format", "command": "mage format"},
+				{"label": "mage lint", "command": "mage lint"},
 			}
 
 			section, err := buildManagedSection(tasks)
@@ -141,12 +140,12 @@ func TestBuildManagedSection(t *testing.T) {
 
 	t.Run("task with optional fields",
 		func(t *testing.T) {
-			tasks := []ZedTask{
+			tasks := []map[string]any{
 				{
-					Label:   "custom",
-					Command: "echo hello",
-					Env:     map[string]string{"FOO": "bar"},
-					Reveal:  "always",
+					"label":   "custom",
+					"command": "echo hello",
+					"env":     map[string]any{"FOO": "bar"},
+					"reveal":  "always",
 				},
 			}
 
@@ -156,6 +155,28 @@ func TestBuildManagedSection(t *testing.T) {
 			assert.Contains(t, section, `"env"`)
 			assert.Contains(t, section, `"FOO": "bar"`)
 			assert.Contains(t, section, `"reveal": "always"`)
+		},
+	)
+
+	t.Run("preserves label and command ordering",
+		func(t *testing.T) {
+			tasks := []map[string]any{
+				{
+					"label":        "mage test",
+					"command":      "mage test",
+					"reveal":       "always",
+					"show_summary": true,
+				},
+			}
+
+			section, err := buildManagedSection(tasks)
+
+			require.NoError(t, err)
+			labelIdx := strings.Index(section, `"label"`)
+			commandIdx := strings.Index(section, `"command"`)
+			revealIdx := strings.Index(section, `"reveal"`)
+			assert.Less(t, labelIdx, commandIdx, "label should come before command")
+			assert.Less(t, commandIdx, revealIdx, "command should come before other fields")
 		},
 	)
 
@@ -173,9 +194,9 @@ func TestBuildManagedSection(t *testing.T) {
 func TestMergeContent(t *testing.T) {
 	managedSection := func(t *testing.T) string {
 		t.Helper()
-		tasks := []ZedTask{
-			{Label: "mage format", Command: "mage format"},
-			{Label: "mage lint", Command: "mage lint"},
+		tasks := []map[string]any{
+			{"label": "mage format", "command": "mage format"},
+			{"label": "mage lint", "command": "mage lint"},
 		}
 		s, err := buildManagedSection(tasks)
 		require.NoError(t, err)
@@ -311,11 +332,10 @@ func TestZedTasksFileIntegration(t *testing.T) {
 			require.NoError(t, os.Chdir(dir))
 			t.Cleanup(func() { os.Chdir(original) })
 
-			tasks := []ZedTask{
-				{Label: "custom build", Command: "go build ./..."},
+			tasks := []map[string]any{
+				{"label": "custom build", "command": "go build ./..."},
 			}
 
-			// build the managed section directly (skipping mage discovery)
 			managedSection, err := buildManagedSection(tasks)
 			require.NoError(t, err)
 
@@ -352,8 +372,8 @@ func TestZedTasksFileIntegration(t *testing.T) {
 			require.NoError(t, os.WriteFile(zedTasksFilePath, []byte(existing), 0o644))
 
 			// now merge a managed section into it
-			tasks := []ZedTask{
-				{Label: "mage test", Command: "mage test"},
+			tasks := []map[string]any{
+				{"label": "mage test", "command": "mage test"},
 			}
 			managedSection, err := buildManagedSection(tasks)
 			require.NoError(t, err)
@@ -368,8 +388,8 @@ func TestZedTasksFileIntegration(t *testing.T) {
 			assert.Contains(t, string(got), `"mage test"`)
 
 			// regenerate with different tasks should keep manual task
-			tasks2 := []ZedTask{
-				{Label: "mage build", Command: "mage build"},
+			tasks2 := []map[string]any{
+				{"label": "mage build", "command": "mage build"},
 			}
 			managedSection2, err := buildManagedSection(tasks2)
 			require.NoError(t, err)
@@ -383,6 +403,334 @@ func TestZedTasksFileIntegration(t *testing.T) {
 			assert.Contains(t, string(got2), `"my manual task"`)
 			assert.Contains(t, string(got2), `"mage build"`)
 			assert.NotContains(t, string(got2), `"mage test"`)
+		},
+	)
+}
+
+func TestExtractManagedTasks(t *testing.T) {
+	t.Run("extracts tasks from managed section",
+		func(t *testing.T) {
+			content := `[
+  // harness:start
+  {
+    "label": "mage test",
+    "command": "mage test",
+    "reveal": "always"
+  }
+  // harness:end
+]
+`
+			tasks := extractManagedTasks(content)
+
+			require.Len(t, tasks, 1)
+			assert.Equal(t, "mage test", tasks[0]["label"])
+			assert.Equal(t, "mage test", tasks[0]["command"])
+			assert.Equal(t, "always", tasks[0]["reveal"])
+		},
+	)
+
+	t.Run("returns nil when no markers",
+		func(t *testing.T) {
+			content := `[
+  {
+    "label": "some task",
+    "command": "echo hello"
+  }
+]
+`
+			tasks := extractManagedTasks(content)
+			assert.Nil(t, tasks)
+		},
+	)
+
+	t.Run("returns nil for empty content",
+		func(t *testing.T) {
+			tasks := extractManagedTasks("")
+			assert.Nil(t, tasks)
+		},
+	)
+
+	t.Run("extracts multiple tasks",
+		func(t *testing.T) {
+			content := `[
+  // harness:start
+  {
+    "label": "mage format",
+    "command": "mage format"
+  },
+  {
+    "label": "mage test",
+    "command": "mage test",
+    "show_summary": true
+  }
+  // harness:end
+]
+`
+			tasks := extractManagedTasks(content)
+
+			require.Len(t, tasks, 2)
+			assert.Equal(t, "mage format", tasks[0]["label"])
+			assert.Equal(t, "mage test", tasks[1]["label"])
+			assert.Equal(t, true, tasks[1]["show_summary"])
+		},
+	)
+}
+
+func TestMergeTaskCustomizations(t *testing.T) {
+	t.Run("preserves user-added fields",
+		func(t *testing.T) {
+			existing := []map[string]any{
+				{
+					"label":        "mage test",
+					"command":      "mage test",
+					"reveal":       "always",
+					"show_summary": true,
+				},
+			}
+
+			newTasks := []ZedTask{
+				{Label: "mage test", Command: "mage test"},
+			}
+
+			merged, err := mergeTaskCustomizations(newTasks, existing)
+
+			require.NoError(t, err)
+			require.Len(t, merged, 1)
+			assert.Equal(t, "mage test", merged[0]["label"])
+			assert.Equal(t, "mage test", merged[0]["command"])
+			assert.Equal(t, "always", merged[0]["reveal"])
+			assert.Equal(t, true, merged[0]["show_summary"])
+		},
+	)
+
+	t.Run("adds new task when no existing match",
+		func(t *testing.T) {
+			existing := []map[string]any{
+				{"label": "mage format", "command": "mage format"},
+			}
+
+			newTasks := []ZedTask{
+				{Label: "mage format", Command: "mage format"},
+				{Label: "mage lint", Command: "mage lint"},
+			}
+
+			merged, err := mergeTaskCustomizations(newTasks, existing)
+
+			require.NoError(t, err)
+			require.Len(t, merged, 2)
+			assert.Equal(t, "mage format", merged[0]["label"])
+			assert.Equal(t, "mage lint", merged[1]["label"])
+		},
+	)
+
+	t.Run("handles empty existing",
+		func(t *testing.T) {
+			newTasks := []ZedTask{
+				{Label: "mage test", Command: "mage test"},
+			}
+
+			merged, err := mergeTaskCustomizations(newTasks, nil)
+
+			require.NoError(t, err)
+			require.Len(t, merged, 1)
+			assert.Equal(t, "mage test", merged[0]["label"])
+		},
+	)
+
+	t.Run("updates command while preserving customizations",
+		func(t *testing.T) {
+			existing := []map[string]any{
+				{
+					"label":   "docker build",
+					"command": "docker build -t old .",
+					"reveal":  "always",
+				},
+			}
+
+			newTasks := []ZedTask{
+				{Label: "docker build", Command: "docker build -t new ."},
+			}
+
+			merged, err := mergeTaskCustomizations(newTasks, existing)
+
+			require.NoError(t, err)
+			require.Len(t, merged, 1)
+			assert.Equal(t, "docker build -t new .", merged[0]["command"])
+			assert.Equal(t, "always", merged[0]["reveal"])
+		},
+	)
+
+	t.Run("preserves show_summary false",
+		func(t *testing.T) {
+			existing := []map[string]any{
+				{
+					"label":        "mage format",
+					"command":      "mage format",
+					"show_summary": false,
+				},
+			}
+
+			newTasks := []ZedTask{
+				{Label: "mage format", Command: "mage format"},
+			}
+
+			merged, err := mergeTaskCustomizations(newTasks, existing)
+
+			require.NoError(t, err)
+			require.Len(t, merged, 1)
+			assert.Equal(t, false, merged[0]["show_summary"])
+		},
+	)
+
+	t.Run("drops tasks removed from new set",
+		func(t *testing.T) {
+			existing := []map[string]any{
+				{"label": "mage old", "command": "mage old"},
+			}
+
+			newTasks := []ZedTask{
+				{Label: "mage new", Command: "mage new"},
+			}
+
+			merged, err := mergeTaskCustomizations(newTasks, existing)
+
+			require.NoError(t, err)
+			require.Len(t, merged, 1)
+			assert.Equal(t, "mage new", merged[0]["label"])
+		},
+	)
+}
+
+func TestAddZedTask(t *testing.T) {
+	t.Run("creates file with single task",
+		func(t *testing.T) {
+			dir := t.TempDir()
+			original, err := os.Getwd()
+			require.NoError(t, err)
+			require.NoError(t, os.Chdir(dir))
+			t.Cleanup(func() { os.Chdir(original) })
+
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build ./..."})
+			require.NoError(t, err)
+
+			got, err := os.ReadFile(zedTasksFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(got), `"label": "build"`)
+			assert.Contains(t, string(got), `"command": "go build ./..."`)
+			assert.Contains(t, string(got), harnessMarkerStart)
+			assert.Contains(t, string(got), harnessMarkerEnd)
+			assertValidJSONCArray(t, string(got))
+		},
+	)
+
+	t.Run("appends task to existing managed section",
+		func(t *testing.T) {
+			dir := t.TempDir()
+			original, err := os.Getwd()
+			require.NoError(t, err)
+			require.NoError(t, os.Chdir(dir))
+			t.Cleanup(func() { os.Chdir(original) })
+
+			// add first task
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build ./..."})
+			require.NoError(t, err)
+
+			// add second task
+			err = AddZedTask(ZedTask{Label: "test", Command: "go test ./..."})
+			require.NoError(t, err)
+
+			got, err := os.ReadFile(zedTasksFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(got), `"label": "build"`)
+			assert.Contains(t, string(got), `"label": "test"`)
+			assertValidJSONCArray(t, string(got))
+		},
+	)
+
+	t.Run("updates existing task by label",
+		func(t *testing.T) {
+			dir := t.TempDir()
+			original, err := os.Getwd()
+			require.NoError(t, err)
+			require.NoError(t, os.Chdir(dir))
+			t.Cleanup(func() { os.Chdir(original) })
+
+			// add a task
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build ./..."})
+			require.NoError(t, err)
+
+			// update the same task with new command
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build -o app ./cmd/app"})
+			require.NoError(t, err)
+
+			got, err := os.ReadFile(zedTasksFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(got), `"command": "go build -o app ./cmd/app"`)
+			assert.NotContains(t, string(got), `"command": "go build ./..."`)
+			assertValidJSONCArray(t, string(got))
+		},
+	)
+
+	t.Run("preserves user customizations on update",
+		func(t *testing.T) {
+			dir := t.TempDir()
+			original, err := os.Getwd()
+			require.NoError(t, err)
+			require.NoError(t, os.Chdir(dir))
+			t.Cleanup(func() { os.Chdir(original) })
+
+			// add initial task
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build ./..."})
+			require.NoError(t, err)
+
+			// simulate user customization by editing the file
+			got, err := os.ReadFile(zedTasksFilePath)
+			require.NoError(t, err)
+			customized := strings.Replace(string(got),
+				`"command": "go build ./..."`,
+				`"command": "go build ./...",`+"\n"+`    "reveal": "always",`+"\n"+`    "show_summary": true`,
+				1)
+			require.NoError(t, os.WriteFile(zedTasksFilePath, []byte(customized), 0o644))
+
+			// re-add the same task (simulating re-generation)
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build ./..."})
+			require.NoError(t, err)
+
+			got, err = os.ReadFile(zedTasksFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(got), `"reveal": "always"`)
+			assert.Contains(t, string(got), `"show_summary": true`)
+			assertValidJSONCArray(t, string(got))
+		},
+	)
+
+	t.Run("preserves tasks outside managed section",
+		func(t *testing.T) {
+			dir := t.TempDir()
+			original, err := os.Getwd()
+			require.NoError(t, err)
+			require.NoError(t, os.Chdir(dir))
+			t.Cleanup(func() { os.Chdir(original) })
+
+			require.NoError(t, os.MkdirAll(".zed", 0o755))
+
+			existing := `[
+  {
+    "label": "my manual task",
+    "command": "echo manual"
+  }
+]
+`
+			require.NoError(t, os.WriteFile(zedTasksFilePath, []byte(existing), 0o644))
+
+			err = AddZedTask(ZedTask{Label: "build", Command: "go build ./..."})
+			require.NoError(t, err)
+
+			got, err := os.ReadFile(zedTasksFilePath)
+			require.NoError(t, err)
+			assert.Contains(t, string(got), `"my manual task"`)
+			assert.Contains(t, string(got), `"label": "build"`)
+			assertValidJSONCArray(t, string(got))
 		},
 	)
 }

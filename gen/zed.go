@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/aexvir/harness"
@@ -33,6 +34,8 @@ type ZedTask struct {
 	Hide                string            `json:"hide,omitempty"`
 	Shell               string            `json:"shell,omitempty"`
 	Tags                []string          `json:"tags,omitempty"`
+	ShowSummary         *bool             `json:"show_summary,omitempty"`
+	ShowCommand         *bool             `json:"show_command,omitempty"`
 }
 
 type zedConfig struct {
@@ -42,9 +45,9 @@ type zedConfig struct {
 // ZedOption configures the Zed tasks file generator.
 type ZedOption func(*zedConfig)
 
-// WithAdditionalTasks allows manually defining tasks in addition to
+// WithZedExtraTasks allows manually defining tasks in addition to
 // what is discovered from mage targets.
-func WithAdditionalTasks(tasks ...ZedTask) ZedOption {
+func WithZedExtraTasks(tasks ...ZedTask) ZedOption {
 	return func(cfg *zedConfig) {
 		cfg.additionalTasks = append(cfg.additionalTasks, tasks...)
 	}
@@ -57,6 +60,9 @@ func WithAdditionalTasks(tasks ...ZedTask) ZedOption {
 // to allow coexistence with manually defined tasks in the same file.
 // When the file already exists, only the managed section between the markers is updated;
 // any tasks outside the markers are left untouched.
+//
+// User customizations on generated tasks (such as adding "reveal" or "show_summary")
+// are preserved across regenerations by matching tasks on their label.
 func ZedTasksFile(opts ...ZedOption) harness.Task {
 	cfg := &zedConfig{}
 	for _, opt := range opts {
@@ -80,36 +86,19 @@ func ZedTasksFile(opts ...ZedOption) harness.Task {
 		}
 		tasks = append(tasks, cfg.additionalTasks...)
 
-		managedSection, err := buildManagedSection(tasks)
+		existing, _ := os.ReadFile(zedTasksFilePath)
+		existingManaged := extractManagedTasks(string(existing))
+
+		merged, err := mergeTaskCustomizations(tasks, existingManaged)
 		if err != nil {
-			return fmt.Errorf("failed to build managed section: %w", err)
+			return fmt.Errorf("failed to merge task customizations: %w", err)
 		}
 
-		if err := os.MkdirAll(filepath.Dir(zedTasksFilePath), 0o755); err != nil {
-			return fmt.Errorf("failed to create .zed directory: %w", err)
+		if err := writeZedTasks(merged); err != nil {
+			return err
 		}
 
-		existing, readErr := os.ReadFile(zedTasksFilePath)
-
-		var content string
-		if readErr != nil && !os.IsNotExist(readErr) {
-			return fmt.Errorf("failed to read existing tasks file: %w", readErr)
-		}
-
-		if os.IsNotExist(readErr) || len(existing) == 0 {
-			content = "[\n" + managedSection + "\n]\n"
-		} else {
-			content, err = mergeContent(string(existing), managedSection)
-			if err != nil {
-				return fmt.Errorf("failed to merge tasks: %w", err)
-			}
-		}
-
-		if err := os.WriteFile(zedTasksFilePath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("failed to write tasks file: %w", err)
-		}
-
-		internal.LogStep(fmt.Sprintf("wrote %d task(s) to %s", len(tasks), zedTasksFilePath))
+		internal.LogStep(fmt.Sprintf("wrote %d task(s) to %s", len(merged), zedTasksFilePath))
 		return nil
 	}
 }
@@ -179,15 +168,15 @@ func parseMageListOutput(output string) []mageTarget {
 
 // buildManagedSection creates the JSONC content for the managed section
 // including the start and end marker comments.
-func buildManagedSection(tasks []ZedTask) (string, error) {
+func buildManagedSection(tasks []map[string]any) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("  " + harnessMarkerStart + "\n")
 
 	for i, task := range tasks {
-		data, err := json.MarshalIndent(task, "  ", "  ")
+		data, err := marshalTask(task, "  ", "  ")
 		if err != nil {
-			return "", fmt.Errorf("failed to marshal task %q: %w", task.Label, err)
+			return "", fmt.Errorf("failed to marshal task: %w", err)
 		}
 
 		sb.WriteString("  ")
@@ -201,6 +190,192 @@ func buildManagedSection(tasks []ZedTask) (string, error) {
 	sb.WriteString("  " + harnessMarkerEnd)
 
 	return sb.String(), nil
+}
+
+// extractManagedTasks parses the managed section from existing file content
+// and returns the tasks as raw JSON maps, preserving all fields including
+// user customizations.
+func extractManagedTasks(content string) []map[string]any {
+	lines := strings.Split(content, "\n")
+	startIdx, endIdx := findMarkerLines(lines)
+	if startIdx < 0 || endIdx <= startIdx {
+		return nil
+	}
+
+	var jsonLines []string
+	for _, line := range lines[startIdx+1 : endIdx] {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		jsonLines = append(jsonLines, line)
+	}
+
+	jsonContent := "[" + strings.Join(jsonLines, "\n") + "]"
+
+	var tasks []map[string]any
+	if err := json.Unmarshal([]byte(jsonContent), &tasks); err != nil {
+		return nil
+	}
+
+	return tasks
+}
+
+// mergeTaskCustomizations merges user customizations from existing tasks
+// into newly generated tasks. Tasks are matched by label. Fields present
+// in the existing task but absent from the new task are preserved.
+func mergeTaskCustomizations(newTasks []ZedTask, existing []map[string]any) ([]map[string]any, error) {
+	existingByLabel := make(map[string]map[string]any, len(existing))
+	for _, t := range existing {
+		if label, ok := t["label"].(string); ok {
+			existingByLabel[label] = t
+		}
+	}
+
+	var result []map[string]any
+	for _, task := range newTasks {
+		newMap, err := taskToMap(task)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert task %q: %w", task.Label, err)
+		}
+
+		if existingTask, ok := existingByLabel[task.Label]; ok {
+			merged := make(map[string]any, len(existingTask))
+			for k, v := range existingTask {
+				merged[k] = v
+			}
+			for k, v := range newMap {
+				merged[k] = v
+			}
+			result = append(result, merged)
+		} else {
+			result = append(result, newMap)
+		}
+	}
+
+	return result, nil
+}
+
+// taskToMap converts a ZedTask to a map[string]any, respecting omitempty semantics.
+func taskToMap(task ZedTask) (map[string]any, error) {
+	data, err := json.Marshal(task)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// marshalTask serializes a task map to JSON with label and command fields first
+// for readability, followed by remaining fields in alphabetical order.
+func marshalTask(task map[string]any, prefix, indent string) ([]byte, error) {
+	var otherKeys []string
+	for k := range task {
+		if k != "label" && k != "command" {
+			otherKeys = append(otherKeys, k)
+		}
+	}
+	sort.Strings(otherKeys)
+
+	orderedKeys := make([]string, 0, len(task))
+	if _, ok := task["label"]; ok {
+		orderedKeys = append(orderedKeys, "label")
+	}
+	if _, ok := task["command"]; ok {
+		orderedKeys = append(orderedKeys, "command")
+	}
+	orderedKeys = append(orderedKeys, otherKeys...)
+
+	var buf bytes.Buffer
+	buf.WriteString("{\n")
+
+	for i, k := range orderedKeys {
+		keyJSON, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		valJSON, err := json.MarshalIndent(task[k], prefix+indent, indent)
+		if err != nil {
+			return nil, err
+		}
+
+		buf.WriteString(prefix + indent + string(keyJSON) + ": " + string(valJSON))
+		if i < len(orderedKeys)-1 {
+			buf.WriteString(",")
+		}
+		buf.WriteString("\n")
+	}
+
+	buf.WriteString(prefix + "}")
+	return buf.Bytes(), nil
+}
+
+// AddZedTask adds or updates a single task in the managed section of .zed/tasks.json.
+// If a task with the same label exists in the managed section, it is updated
+// while preserving any user customizations. Otherwise, the task is appended.
+// This is intended for use by the CLI tool (e.g. via //go:generate directives).
+func AddZedTask(task ZedTask) error {
+	existing, _ := os.ReadFile(zedTasksFilePath)
+	existingManaged := extractManagedTasks(string(existing))
+
+	newMap, err := taskToMap(task)
+	if err != nil {
+		return fmt.Errorf("failed to convert task: %w", err)
+	}
+
+	found := false
+	for i, t := range existingManaged {
+		if label, ok := t["label"].(string); ok && label == task.Label {
+			merged := make(map[string]any, len(t))
+			for k, v := range t {
+				merged[k] = v
+			}
+			for k, v := range newMap {
+				merged[k] = v
+			}
+			existingManaged[i] = merged
+			found = true
+			break
+		}
+	}
+	if !found {
+		existingManaged = append(existingManaged, newMap)
+	}
+
+	return writeZedTasks(existingManaged)
+}
+
+// writeZedTasks writes the given tasks to the .zed/tasks.json file,
+// preserving any user-defined tasks outside the managed section.
+func writeZedTasks(tasks []map[string]any) error {
+	if err := os.MkdirAll(filepath.Dir(zedTasksFilePath), 0o755); err != nil {
+		return fmt.Errorf("failed to create .zed directory: %w", err)
+	}
+
+	managedSection, err := buildManagedSection(tasks)
+	if err != nil {
+		return fmt.Errorf("failed to build managed section: %w", err)
+	}
+
+	existing, readErr := os.ReadFile(zedTasksFilePath)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return fmt.Errorf("failed to read existing tasks file: %w", readErr)
+	}
+
+	var content string
+	if os.IsNotExist(readErr) || len(existing) == 0 {
+		content = "[\n" + managedSection + "\n]\n"
+	} else {
+		content, err = mergeContent(string(existing), managedSection)
+		if err != nil {
+			return fmt.Errorf("failed to merge tasks: %w", err)
+		}
+	}
+
+	return os.WriteFile(zedTasksFilePath, []byte(content), 0o644)
 }
 
 // mergeContent merges the managed section into existing file content.
