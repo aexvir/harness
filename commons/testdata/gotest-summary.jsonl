@@ -1,0 +1,11 @@
+{"Time":"2026-03-11T12:00:00Z","Action":"run","Package":"github.com/aexvir/harness/commons","Test":"TestAlpha"}
+{"Time":"2026-03-11T12:00:01Z","Action":"pass","Package":"github.com/aexvir/harness/commons","Test":"TestAlpha","Elapsed":0.001}
+{"Time":"2026-03-11T12:00:02Z","Action":"run","Package":"github.com/aexvir/harness/commons","Test":"TestBeta"}
+{"Time":"2026-03-11T12:00:03Z","Action":"skip","Package":"github.com/aexvir/harness/commons","Test":"TestBeta","Elapsed":0}
+{"Time":"2026-03-11T12:00:04Z","Action":"run","Package":"github.com/aexvir/harness/commons","Test":"TestGamma"}
+{"Time":"2026-03-11T12:00:05Z","Action":"fail","Package":"github.com/aexvir/harness/commons","Test":"TestGamma","Elapsed":0.002}
+{"Time":"2026-03-11T12:00:06Z","Action":"run","Package":"github.com/aexvir/harness/commons","Test":"TestDelta"}
+{"Time":"2026-03-11T12:00:07Z","Action":"pass","Package":"github.com/aexvir/harness/commons","Test":"TestDelta","Elapsed":0.001}
+{"Time":"2026-03-11T12:00:08Z","Action":"output","Package":"github.com/aexvir/harness/commons","Test":"TestDelta","Output":"ok\n"}
+{"Time":"2026-03-11T12:00:09Z","Action":"pass","Package":"github.com/aexvir/harness/commons","Elapsed":0.005}
+not-json
