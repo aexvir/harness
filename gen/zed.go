@@ -34,8 +34,8 @@ type ZedTask struct {
 	Hide                string            `json:"hide,omitempty"`
 	Shell               string            `json:"shell,omitempty"`
 	Tags                []string          `json:"tags,omitempty"`
-	ShowSummary         *bool             `json:"show_summary,omitempty"`
-	ShowCommand         *bool             `json:"show_command,omitempty"`
+	ShowSummary         *bool             `json:"show_summary,omitempty"` // whether to show a summary after the task completes
+	ShowCommand         *bool             `json:"show_command,omitempty"` // whether to echo the command in the terminal output
 }
 
 type zedConfig struct {
@@ -86,7 +86,10 @@ func ZedTasksFile(opts ...ZedOption) harness.Task {
 		}
 		tasks = append(tasks, cfg.additionalTasks...)
 
-		existing, _ := os.ReadFile(zedTasksFilePath)
+		existing, readErr := os.ReadFile(zedTasksFilePath)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return fmt.Errorf("failed to read existing tasks file: %w", readErr)
+		}
 		existingManaged := extractManagedTasks(string(existing))
 
 		merged, err := mergeTaskCustomizations(tasks, existingManaged)
@@ -318,7 +321,10 @@ func marshalTask(task map[string]any, prefix, indent string) ([]byte, error) {
 // while preserving any user customizations. Otherwise, the task is appended.
 // This is intended for use by the CLI tool (e.g. via //go:generate directives).
 func AddZedTask(task ZedTask) error {
-	existing, _ := os.ReadFile(zedTasksFilePath)
+	existing, readErr := os.ReadFile(zedTasksFilePath)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return fmt.Errorf("failed to read existing tasks file: %w", readErr)
+	}
 	existingManaged := extractManagedTasks(string(existing))
 
 	newMap, err := taskToMap(task)
