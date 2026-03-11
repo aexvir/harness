@@ -3,14 +3,22 @@ package binary
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/aexvir/harness/internal"
 )
 
 const SkipVersionCheck = ""
+
+// SetOutput sets where binary provisioning logs are written.
+func SetOutput(w io.Writer) {
+	internal.SetOutput(w)
+}
 
 type Binary struct {
 	// these fields are mostly used as metadata at the moment
@@ -95,7 +103,7 @@ func (b *Binary) Ensure() error {
 
 // Install the binary.
 func (b *Binary) Install() error {
-	logstep(fmt.Sprintf("installing %s", b.template.Name))
+	internal.LogStep(fmt.Sprintf("installing %s", b.template.Name))
 	return b.origin.Install(b.template)
 }
 
@@ -122,7 +130,7 @@ func (b *Binary) isExpectedVersion() bool {
 	semver := strings.TrimPrefix(b.version, "v")
 	args := strings.Split(b.versioncmd, " ")
 
-	logstep(fmt.Sprintf("running %v looking for %s", args, semver))
+	internal.LogStep(fmt.Sprintf("running %v looking for %s", args, semver))
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	if err != nil {
 		return false

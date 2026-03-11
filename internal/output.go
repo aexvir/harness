@@ -1,0 +1,86 @@
+package internal
+
+import (
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/fatih/color"
+)
+
+var Output io.Writer = os.Stdout
+
+func SetOutput(w io.Writer) {
+	Output = w
+}
+
+// LogBlank writes an empty line to the output.
+func LogBlank() {
+	fmt.Fprintln(Output)
+}
+
+// LogSeparator writes a dim horizontal rule.
+func LogSeparator() {
+	color.New(color.FgHiBlack).Fprintf(Output, "------------------------\n\n")
+}
+
+// LogCommand writes a top-level command heading using the command symbol.
+// This is the most prominent log level, used for task names.
+func LogCommand(text string) {
+	fmt.Fprintln(
+		Output,
+		color.MagentaString(" %s", Symbols.Command),
+		color.New(color.Bold).Sprint(text),
+	)
+}
+
+// LogStep writes a secondary step line using the dot symbol.
+// Used for provisioning and sub-task progress.
+func LogStep(text string) {
+	fmt.Fprintln(
+		Output,
+		color.BlueString(" %s", Symbols.Dot),
+		color.New(color.FgHiBlack).Sprint(text),
+	)
+}
+
+// LogDetail writes an indented detail line using the detail symbol.
+func LogDetail(text string) {
+	fmt.Fprintln(
+		Output,
+		color.New(color.FgHiBlack).Sprintf("   %s", Symbols.Detail),
+		color.New(color.FgHiBlack).Sprint(text),
+	)
+}
+
+// LogSuccess writes a green success line with the success symbol.
+func LogSuccess(text string) {
+	color.New(color.FgGreen).Fprintf(Output, " %s %s\n", Symbols.Success, text)
+}
+
+// LogError writes a red error line with the error symbol.
+func LogError(text string) {
+	color.New(color.FgRed).Fprintf(Output, " %s %s\n", Symbols.Error, text)
+}
+
+// LogErrorItem writes an indented red error bullet using the dot symbol.
+func LogErrorItem(text string) {
+	color.New(color.FgRed).Fprintf(Output, "   %s %s\n", Symbols.Dot, text)
+}
+
+// LogStatus writes an indented status indicator based on whether err is nil.
+// Unlike LogSuccess/LogError, this does not append a newline, allowing the
+// caller to control line termination.
+func LogStatus(text string, err error) {
+	if err != nil {
+		color.New(color.FgRed).Fprintf(Output, "     %s %s", Symbols.Error, text)
+		return
+	}
+
+	color.New(color.FgGreen).Fprintf(Output, "     %s %s", Symbols.Success, text)
+}
+
+// LogMessage writes a line in the specified color without any symbol prefix.
+func LogMessage(attr color.Attribute, text string) {
+	color.New(attr).Fprintln(Output, text)
+}

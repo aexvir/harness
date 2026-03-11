@@ -1,7 +1,9 @@
 package binary
 
 import (
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +12,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// silent output when not verbose
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	if !testing.Verbose() {
+		SetOutput(io.Discard)
+	}
+
+	code := m.Run()
+	os.Exit(code)
+}
 
 func TestNew(t *testing.T) {
 	wantDir := filepath.FromSlash("./bin")

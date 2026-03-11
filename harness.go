@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fatih/color"
+	"github.com/aexvir/harness/internal"
 )
 
 // Harness is a support structure that runs tasks, the harness can be customized with
@@ -37,7 +37,7 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	var errs []string
 	start := time.Now()
 
-	fmt.Printf("\n")
+	internal.LogBlank()
 
 	if err := h.PreExecHook(ctx); err != nil {
 		return fmt.Errorf("failed to initialize ci harness: %s", err.Error())
@@ -55,18 +55,19 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 	}
 
 	elapsed := time.Since(start).Round(time.Millisecond)
-	color.New(color.FgHiBlack).Printf("------------------------\n\n")
+	internal.LogSeparator()
 
 	if len(errs) > 0 {
-		color.Red(" %s finished with errors after %s", Symbols.Error, elapsed)
+		internal.LogError(fmt.Sprintf("finished with errors after %s", elapsed))
 		for _, errmsg := range errs {
-			color.Red("   %s %s", Symbols.Dot, errmsg)
+			internal.LogErrorItem(errmsg)
 		}
-		fmt.Printf("\n")
+		internal.LogBlank()
 		return fmt.Errorf("task finished with errors")
 	}
 
-	color.Green(" %s all good after %s\n\n", Symbols.Success, elapsed)
+	internal.LogSuccess(fmt.Sprintf("all good after %s", elapsed))
+	internal.LogBlank()
 	return nil
 }
 
@@ -75,10 +76,7 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 // this is mainly useful for adding additional info when defining ad-hoc tasks inside
 // a Harness.Exec block.
 func LogStep(text string) {
-	fmt.Println(
-		color.MagentaString(" %s", Symbols.Command),
-		color.New(color.Bold).Sprint(text),
-	)
+	internal.LogCommand(text)
 }
 
 // Task defines the basic function that the harness executes.
@@ -88,7 +86,7 @@ type Task func(ctx context.Context) error
 
 type Option func(h *Harness)
 
-// WithPreExecFunc allows specifying a task that will be run every execution, before the
+// WithPreExecFunc allows specifying a [Task] that will be run every execution, **before** the
 // specific execution tasks are run.
 func WithPreExecFunc(hook Task) Option {
 	return func(h *Harness) {
@@ -96,7 +94,7 @@ func WithPreExecFunc(hook Task) Option {
 	}
 }
 
-// WithPostExecFunc allows specifying a task that will be run every execution, after the
+// WithPostExecFunc allows specifying a [Task] that will be run every execution, **after** the
 // specific execution tasks are run.
 func WithPostExecFunc(hook Task) Option {
 	return func(h *Harness) {

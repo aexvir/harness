@@ -3,11 +3,26 @@ package harness
 import (
 	"context"
 	"errors"
+	"flag"
+	"io"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// silent output when not verbose
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	if !testing.Verbose() {
+		SetOutput(io.Discard)
+	}
+
+	code := m.Run()
+	os.Exit(code)
+}
 
 func TestHarnessExecute(t *testing.T) {
 	t.Run("runs pre tasks and post in order",

@@ -39,6 +39,9 @@
 //		return fmt.Errorf("failed to provision commitsar binary: %w", err)
 //	}
 //
+//	// optionally silence or redirect harness and binary logs
+//	harness.SetOutput(io.Discard)
+//
 //	// use via harness
 //	harness.Run(ctx, commitsar.BinPath(), harness.WithArgs("--help"))
 //
