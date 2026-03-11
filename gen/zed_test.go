@@ -306,7 +306,8 @@ func TestZedTasksFileIntegration(t *testing.T) {
 	t.Run("creates new file with additional tasks when mage is unavailable",
 		func(t *testing.T) {
 			dir := t.TempDir()
-			original, _ := os.Getwd()
+			original, err := os.Getwd()
+			require.NoError(t, err)
 			require.NoError(t, os.Chdir(dir))
 			t.Cleanup(func() { os.Chdir(original) })
 
@@ -333,7 +334,8 @@ func TestZedTasksFileIntegration(t *testing.T) {
 	t.Run("merges with existing file",
 		func(t *testing.T) {
 			dir := t.TempDir()
-			original, _ := os.Getwd()
+			original, err := os.Getwd()
+			require.NoError(t, err)
 			require.NoError(t, os.Chdir(dir))
 			t.Cleanup(func() { os.Chdir(original) })
 
