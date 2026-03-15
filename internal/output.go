@@ -6,12 +6,22 @@ import (
 	"os"
 
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 )
 
 var Output io.Writer = os.Stdout
 
 func SetOutput(w io.Writer) {
 	Output = w
+}
+
+func IsTerminalWriter(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	fd := file.Fd()
+	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
 
 // LogBlank writes an empty line to the output.

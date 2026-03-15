@@ -104,7 +104,11 @@ func (b *Binary) Ensure() error {
 // Install the binary.
 func (b *Binary) Install() error {
 	internal.LogStep(fmt.Sprintf("installing %s", b.template.Name))
-	return b.origin.Install(b.template)
+	return internal.WithIndeterminateProgressbar(
+		func() error {
+			return b.origin.Install(b.template)
+		},
+	)
 }
 
 // isInstalled returns true if the binary is installed.

@@ -43,11 +43,15 @@ func (h *Harness) Execute(ctx context.Context, tasks ...Task) error {
 		return fmt.Errorf("failed to initialize ci harness: %s", err.Error())
 	}
 
-	for i := range tasks {
-		task := tasks[i]
-		if err := task(ctx); err != nil {
+	progress := internal.NewTaskProgressTracker(ctx, len(tasks))
+	defer progress.Clear()
+
+	for _, task := range tasks {
+		err := task(ctx)
+		if err != nil {
 			errs = append(errs, err.Error())
 		}
+		progress.TaskFinished(err)
 	}
 
 	if err := h.PostExecHook(ctx); err != nil {

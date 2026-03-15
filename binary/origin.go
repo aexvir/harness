@@ -11,7 +11,6 @@ import (
 
 	"github.com/cheggaaa/pb/v3"
 	"github.com/fatih/color"
-	"github.com/mattn/go-isatty"
 
 	"github.com/aexvir/harness/internal"
 )
@@ -280,7 +279,7 @@ func extract(compressed, destination string, processor func(path string) *string
 // Returns the wrapped reader and a function to finalize the progress display.
 // The progress bar shows transfer speed and completion percentage.
 func progress(reader io.Reader, size int64) (io.Reader, func()) {
-	if !isTerminalWriter(internal.Output) {
+	if !internal.IsTerminalWriter(internal.Output) {
 		return reader, func() {}
 	}
 
@@ -301,13 +300,4 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 		Start()
 
 	return bar.NewProxyReader(reader), func() { bar.Finish() }
-}
-
-func isTerminalWriter(w io.Writer) bool {
-	file, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	fd := file.Fd()
-	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
