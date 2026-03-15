@@ -316,7 +316,7 @@ func withTempDir(t *testing.T) string {
 	require.NoError(t, err)
 	require.NoError(t, os.Chdir(dir))
 
-	t.Cleanup(func() { os.Chdir(current) })
+	t.Cleanup(func() { require.NoError(t, os.Chdir(current)) })
 
 	return dir
 }

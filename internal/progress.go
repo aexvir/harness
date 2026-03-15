@@ -151,5 +151,5 @@ func (tracker *TaskProgressTracker) keepalive(ctx context.Context, interval time
 }
 
 func emitOscCode(state oscProgressState, value int) {
-	fmt.Fprintf(Output, "\x1b]9;4;%d;%d\x07", state, value)
+	fmt.Fprintf(Output, "\x1b]9;4;%d;%d\x07", state, value) //nolint:errcheck
 }

@@ -12,12 +12,16 @@ import (
 )
 
 // handles .tar.gz files
-func untar(file io.Reader, destination string, processor func(path string) *string) error {
+func untar(file io.Reader, destination string, processor func(path string) *string) (err error) {
 	decompressor, err := gzip.NewReader(file)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer decompressor.Close()
+	defer func() {
+		if closerr := decompressor.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close gzip reader: %w", closerr))
+		}
+	}()
 
 	reader := tar.NewReader(decompressor)
 
@@ -50,9 +54,15 @@ func untar(file io.Reader, destination string, processor func(path string) *stri
 			if err != nil {
 				return fmt.Errorf("failed to create file %s: %w", target, err)
 			}
-			defer out.Close()
+			defer func() {
+				if closerr := out.Close(); closerr != nil {
+					err = errors.Join(err, fmt.Errorf("failed to close file %s: %w", target, closerr))
+				}
+			}()
 
-			_ = os.Chmod(target, 0o755)
+			if err := os.Chmod(target, 0o755); err != nil {
+				return fmt.Errorf("failed to set permissions on %s: %w", target, err)
+			}
 
 			if _, err := io.Copy(out, reader); err != nil {
 				return fmt.Errorf("failed to copy data to file %s: %w", target, err)
@@ -64,7 +74,7 @@ func untar(file io.Reader, destination string, processor func(path string) *stri
 }
 
 // handles .zip files
-func unzip(file io.ReaderAt, size int64, destination string, processor func(path string) *string) error {
+func unzip(file io.ReaderAt, size int64, destination string, processor func(path string) *string) (err error) {
 	reader, err := zip.NewReader(file, size)
 	if err != nil {
 		return fmt.Errorf("failed to create zip reader: %w", err)
@@ -92,15 +102,25 @@ func unzip(file io.ReaderAt, size int64, destination string, processor func(path
 		if err != nil {
 			return fmt.Errorf("failed to create file %s: %w", target, err)
 		}
-		defer out.Close()
+		defer func() {
+			if closerr := out.Close(); closerr != nil {
+				err = errors.Join(err, fmt.Errorf("failed to close file %s: %w", target, closerr))
+			}
+		}()
 
-		_ = os.Chmod(target, 0o755)
+		if err := os.Chmod(target, 0o755); err != nil {
+			return fmt.Errorf("failed to set permissions on %s: %w", target, err)
+		}
 
 		contents, err := file.Open()
 		if err != nil {
-			return fmt.Errorf("failed to open file %s: %w", target, err)
+			return fmt.Errorf("failed to open compressed file %s: %w", file.Name, err)
 		}
-		defer contents.Close()
+		defer func() {
+			if closerr := contents.Close(); closerr != nil {
+				err = errors.Join(err, fmt.Errorf("failed to close compressed file %s: %w", file.Name, closerr))
+			}
+		}()
 
 		if _, err := io.Copy(out, contents); err != nil {
 			return fmt.Errorf("failed to copy data to file %s: %w", target, err)

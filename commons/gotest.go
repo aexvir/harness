@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -277,7 +278,7 @@ func computeTestSummaryFromJSON(testout []byte) (tests, passed, skipped, failed 
 }
 
 // writeGitHubStepSummary writes the specified line to the GitHub step summary file.
-func writeGitHubStepSummary(line string) error {
+func writeGitHubStepSummary(line string) (err error) {
 	summary := os.Getenv("GITHUB_STEP_SUMMARY")
 	if summary == "" {
 		return nil
@@ -287,7 +288,12 @@ func writeGitHubStepSummary(line string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+
+	defer func() {
+		if closerr := f.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("fatal: couldn't close file %s: %s", summary, closerr))
+		}
+	}()
 
 	_, err = fmt.Fprintf(f, "## Test summary\n\n- %s\n", line)
 

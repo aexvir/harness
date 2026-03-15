@@ -1,6 +1,7 @@
 package binary
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,7 +55,11 @@ func (r *remotebin) Install(template Template) error {
 	if err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closerr := resp.Body.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close http response body: %w", closerr))
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("received unexpected response when downloading binary: http%d", resp.StatusCode)
@@ -67,7 +72,11 @@ func (r *remotebin) Install(template Template) error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file %s: %w", template.Cmd, err)
 	}
-	defer out.Close()
+	defer func() {
+		if closerr := out.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close file %s: %w", template.Cmd, closerr))
+		}
+	}()
 
 	if err := os.Chmod(template.Cmd, 0o755); err != nil {
 		return fmt.Errorf("failed to set permissions on %s: %w", template.Cmd, err)
@@ -211,7 +220,11 @@ func download(url, destination string) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closerr := resp.Body.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close http response body: %w", closerr))
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("unexpected response when downloading archive: http%d", resp.StatusCode)
@@ -224,7 +237,11 @@ func download(url, destination string) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", destination, err)
 	}
-	defer out.Close()
+	defer func() {
+		if closerr := out.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close file %s: %w", destination, closerr))
+		}
+	}()
 
 	_, err = io.Copy(out, data)
 	if err != nil {
@@ -253,12 +270,18 @@ func extract(compressed, destination string, processor func(path string) *string
 	if err != nil {
 		return fmt.Errorf("failed to open compressed file: %w", err)
 	}
-	defer file.Close()
-	defer os.Remove(compressed)
+	defer func() {
+		if closerr := file.Close(); closerr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close file %s: %w", compressed, closerr))
+		}
+		_ = os.Remove(compressed)
+	}()
 
 	// sniff mime header to determine file type
 	header := make([]byte, 512)
-	file.Read(header)
+	if _, err := file.Read(header); err != nil {
+		return fmt.Errorf("failed to read file header: %w", err)
+	}
 	mime := http.DetectContentType(header)
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return err
