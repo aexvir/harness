@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -26,10 +27,16 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 	}
 
 	return func(ctx context.Context) error {
+		version := strings.TrimPrefix(conf.version, "v")
 		gci := binary.New(
 			"golangci-lint",
-			conf.version,
-			binary.GoBinary("github.com/golangci/golangci-lint/cmd/golangci-lint"),
+			version,
+			binary.RemoteArchiveDownload(
+				"https://github.com/golangci/golangci-lint/releases/download/v{{.Version}}/golangci-lint-{{.Version}}-{{.GOOS}}-{{.GOARCH}}.tar.gz",
+				map[string]string{
+					"golangci-lint-{{.Version}}-{{.GOOS}}-{{.GOARCH}}/golangci-lint": "golangci-lint",
+				},
+			),
 		)
 
 		if err := gci.Ensure(); err != nil {
@@ -45,7 +52,12 @@ func GolangCILint(opts ...GolangCILintOpt) harness.Task {
 		var err error
 
 		if conf.codeclimate {
-			args = append(args, "--out-format", fmt.Sprintf("code-climate:%s", conf.codeclimatefile))
+			ccformat := []string{"--output.code-climate.path", conf.codeclimatefile}
+			if strings.HasPrefix(conf.version, "1.") {
+				ccformat = []string{"--out-format", fmt.Sprintf("code-climate:%s", conf.codeclimatefile)}
+			}
+
+			args = append(args, ccformat...)
 			defer func() {
 				if err != nil {
 					// print found issues directly from the codeclimate file to avoid re-running golangci-lint with a different format
