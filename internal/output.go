@@ -16,6 +16,12 @@ func SetOutput(w io.Writer) {
 }
 
 func IsTerminalWriter(w io.Writer) bool {
+	// IsTTY is implemented by the testing syncbuffer.
+	type tty interface{ IsTTY() bool }
+	if t, ok := w.(tty); ok {
+		return t.IsTTY()
+	}
+
 	file, ok := w.(*os.File)
 	if !ok {
 		return false

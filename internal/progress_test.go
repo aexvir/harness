@@ -360,6 +360,8 @@ func (b *syncbuffer) Reset() {
 	b.buf.Reset()
 }
 
+func (b *syncbuffer) IsTTY() bool { return true }
+
 func installOutputCapture(t *testing.T) *syncbuffer {
 	t.Helper()
 

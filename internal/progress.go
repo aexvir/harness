@@ -30,6 +30,10 @@ type TaskProgressTracker struct {
 }
 
 func NewTaskProgressTracker(ctx context.Context, amount int) *TaskProgressTracker {
+	if !IsTerminalWriter(Output) {
+		return &TaskProgressTracker{}
+	}
+
 	indeterminate.Store(false)
 
 	tracker := &TaskProgressTracker{
@@ -71,6 +75,9 @@ func (tracker *TaskProgressTracker) TaskFinished(err error) {
 
 // Clear the progress bar.
 func (tracker *TaskProgressTracker) Clear() {
+	if tracker.done == nil {
+		return
+	}
 	<-tracker.done
 	// intentional delay to allow the user to see the full progress bar
 	// this should be a good balance between overhead and user experience
@@ -82,6 +89,10 @@ func (tracker *TaskProgressTracker) Clear() {
 // If there's an active task progress tracker, its progress bar will be paused for
 // the duration of this function call.
 func WithIndeterminateProgressbar(fn func() error) error {
+	if !IsTerminalWriter(Output) {
+		return fn()
+	}
+
 	indeterminate.Store(true)
 	defer indeterminate.Store(false)
 
