@@ -1,0 +1,21 @@
+[
+  // comment
+  {
+    "label": "mage: fmt",
+    "command": "mage",
+    "args": [
+      "fmt"
+    ]
+  },
+  {
+    "label": "mage: test",
+    "command": "mage",
+    "args": [
+      "test"
+    ]
+  },
+  {
+    "label": "custom",
+    "command": "echo"
+  }
+]
