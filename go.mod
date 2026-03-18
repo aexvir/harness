@@ -7,6 +7,8 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/stretchr/testify v1.11.1
+	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
+	github.com/urfave/cli/v3 v3.7.0
 )
 
 require (

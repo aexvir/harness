@@ -7,6 +7,7 @@ import (
 
 	"github.com/aexvir/harness"
 	"github.com/aexvir/harness/commons"
+	"github.com/aexvir/harness/gen"
 )
 
 const (
@@ -29,6 +30,13 @@ func Format(ctx context.Context) error {
 		ctx,
 		commons.GoFmt(),
 		commons.GoImports(pkgName),
+	)
+}
+
+func Generate(ctx context.Context) error {
+	return h.Execute(
+		ctx,
+		gen.New().GenerateZedTasks(),
 	)
 }
 
