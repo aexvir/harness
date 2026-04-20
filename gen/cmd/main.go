@@ -35,7 +35,7 @@ func buildApp() *cli.Command {
 		// called when no subcommand matches or no args given
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			if cmd.NArg() > 0 {
-				return fmt.Errorf("unknown generator %q; supported: zed", cmd.Args().First())
+				return fmt.Errorf("unknown generator %q; supported: zed, agent", cmd.Args().First())
 			}
 			return fmt.Errorf("expected a generator command")
 		},
@@ -93,6 +93,54 @@ func buildApp() *cli.Command {
 							return gen.New().UpsertZedTasks(
 								gen.WithExtraTasks(task),
 								gen.WithZedTasksFile(cmd.String("file")),
+							)(ctx)
+						},
+					},
+				},
+			},
+			{
+				Name:  "agent",
+				Usage: "AI agent generators",
+				Action: func(_ context.Context, cmd *cli.Command) error {
+					if cmd.NArg() > 0 {
+						return fmt.Errorf("unknown agent action %q; supported: skill", cmd.Args().First())
+					}
+					return fmt.Errorf("expected an action for agent")
+				},
+				Commands: []*cli.Command{
+					{
+						Name:  "skill",
+						Usage: "upsert a skill directory under the agent skills folder",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "name",
+								Usage:    "skill `name` (also used as the directory name)",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:     "description",
+								Usage:    "skill `description` written to frontmatter",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:  "body",
+								Usage: "markdown `body` written when the skill file is created",
+							},
+							&cli.StringFlag{
+								Name:  "dir",
+								Usage: "path to the skills `directory`",
+								Value: ".claude/skills",
+							},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+							skill := gen.AgentSkill{
+								Name:        cmd.String("name"),
+								Description: cmd.String("description"),
+								Body:        cmd.String("body"),
+							}
+							return gen.New().UpsertAgentSkills(
+								gen.WithExtraAgentSkills(skill),
+								gen.WithAgentSkillsDir(cmd.String("dir")),
 							)(ctx)
 						},
 					},

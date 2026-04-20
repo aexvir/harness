@@ -14,4 +14,5 @@
 //
 // Create a [Generator] with [New] and call its methods:
 //   - [Generator.GenerateZedTasks] / [Generator.CleanupZedTasks] – Zed editor task integration
+//   - [Generator.GenerateAgentSkills] / [Generator.CleanupAgentSkills] – AI agent skill files
 package gen
