@@ -86,6 +86,17 @@ func (r *TaskRunner) Exec() error {
 		}
 	}
 
+	// wrap the command stdout/stderr writers with a shared border writer so the
+	// command output is visually separated from the harness output
+	var border *internal.BorderWriter
+	if !r.quiet {
+		border = internal.NewBorderWriter(internal.Output)
+		r.cmd.Stdout = wrapWithBorder(r.cmd.Stdout, border)
+		r.cmd.Stderr = wrapWithBorder(r.cmd.Stderr, border)
+		border.Start()
+		defer border.Close() //nolint:errcheck
+	}
+
 	err = r.cmd.Run()
 
 	if !r.allowerr && err != nil {
@@ -100,6 +111,16 @@ func (r *TaskRunner) Exec() error {
 	}
 
 	return nil
+}
+
+// wrapWithBorder returns a writer that forwards command output to the border
+// writer, while preserving any user-provided writer (other than the harness'
+// own output stream, which would cause duplicate output).
+func wrapWithBorder(existing io.Writer, border *internal.BorderWriter) io.Writer {
+	if existing == nil || existing == os.Stdout || existing == os.Stderr || existing == internal.Output {
+		return border
+	}
+	return io.MultiWriter(existing, border)
 }
 
 // Run is a helper function to avoid repetition while gracefully handling errors.
