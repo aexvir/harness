@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/fatih/color"
@@ -58,44 +59,33 @@ type BorderWriter struct {
 	out     io.Writer
 	style   borders
 	color   *color.Color
-	width   int  // total terminal width
-	content int  // inner width available for content
-	enabled bool // false when output is not a terminal
-	started bool
-	closed  bool
+	width   int          // total terminal width
+	content int          // inner width available for content; zero disables decoration
+	started bool         // true once the top border has been emitted
 	pending bytes.Buffer // current partial line not yet terminated by \n
 }
 
 // NewBorderWriter constructs a BorderWriter that draws a box around anything
-// written to it before forwarding to w.
+// written to it before forwarding to w. If w is not a terminal, or the
+// terminal is too narrow to hold any content, the writer becomes a transparent
+// pass-through.
 func NewBorderWriter(w io.Writer) *BorderWriter {
-	width := 0
-	if IsTerminalWriter(w) {
-		width = getTerminalWidth(w)
-	}
-	return newBorderWriter(w, width)
-}
-
-// newBorderWriter is the constructor used internally and by tests. A width of
-// zero (or a non-tty target) disables the border decoration.
-func newBorderWriter(writer io.Writer, width int) *BorderWriter {
 	bw := &BorderWriter{
-		out:     writer,
-		style:   defaultBorderStyle,
-		color:   color.New(color.FgHiBlack),
-		enabled: width > 0 && IsTerminalWriter(writer),
+		out:   w,
+		style: defaultBorderStyle,
+		color: color.New(color.FgHiBlack),
 	}
 
-	if bw.enabled {
-		bw.width = width
-		// layout is "   │ <content> │"; left edge at column 4 (aligned with the
-		// harness LogStep/LogCommand text), right edge at the second-to-last column.
-		// reservation: 3 leading spaces + 1 vertical + 1 space + content + 1 space + 1 vertical + 1 trailing column = width
-		bw.content = bw.width - 8
-		if bw.content < 1 {
-			// terminal too narrow; disable decoration to avoid garbled output
-			bw.enabled = false
-		}
+	if !IsTerminalWriter(w) {
+		return bw
+	}
+
+	bw.width = getTerminalWidth(w)
+	// layout is "   │ <content> │"; left edge at column 4 (aligned with the
+	// harness LogStep/LogCommand text), right edge at the second-to-last column.
+	// reservation: 3 leading spaces + 1 vertical + 1 space + content + 1 space + 1 vertical + 1 trailing column = width
+	if c := bw.width - 8; c > 0 {
+		bw.content = c
 	}
 
 	return bw
@@ -119,13 +109,13 @@ const leftIndent = "   "
 // Write implements io.Writer. It buffers partial lines and emits each complete
 // line wrapped with the box border characters.
 func (b *BorderWriter) Write(text []byte) (int, error) {
-	if !b.enabled {
+	if b.content == 0 {
 		return b.out.Write(text)
 	}
 
 	// lazy emit of the top border on the very first write
 	if !b.started {
-		line := b.style.TopLeft + repeat(b.style.Horizontal, b.width-6) + b.style.TopRight
+		line := b.style.TopLeft + strings.Repeat(b.style.Horizontal, b.width-6) + b.style.TopRight
 		fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
 		b.started = true
 	}
@@ -156,10 +146,9 @@ func (b *BorderWriter) Write(text []byte) (int, error) {
 // don't produce an empty card.
 // Safe to call multiple times.
 func (b *BorderWriter) Close() error {
-	if !b.enabled || b.closed {
+	if b.content == 0 {
 		return nil
 	}
-	b.closed = true
 
 	// flush trailing partial line, if any
 	if b.pending.Len() > 0 {
@@ -167,12 +156,16 @@ func (b *BorderWriter) Close() error {
 		b.pending.Reset()
 	}
 
+	// disable further decoration so subsequent calls are no-ops
+	width, started := b.width, b.started
+	b.content = 0
+
 	// nothing was ever written; skip the bottom border to avoid an empty card.
-	if !b.started {
+	if !started {
 		return nil
 	}
 
-	line := b.style.BottomLeft + repeat(b.style.Horizontal, b.width-6) + b.style.BottomRight
+	line := b.style.BottomLeft + strings.Repeat(b.style.Horizontal, width-6) + b.style.BottomRight
 	fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
 	return nil
 }
@@ -191,7 +184,7 @@ func (b *BorderWriter) emitLine(line []byte) {
 		if pad < 0 {
 			pad = 0
 		}
-		fmt.Fprintf(b.out, "%s%s%s%s%s\n", left, chunk.prefix, chunk.text, spaces(pad), right) //nolint:errcheck
+		fmt.Fprintf(b.out, "%s%s%s%s%s\n", left, chunk.prefix, chunk.text, strings.Repeat(" ", pad), right) //nolint:errcheck
 	}
 }
 
@@ -201,11 +194,6 @@ type lineChunk struct {
 	text   []byte // raw bytes (possibly containing ANSI sequences) to emit for this row
 	width  int    // visible width in cells of text
 }
-
-// sgrPattern matches a Select Graphic Rendition (SGR) escape sequence.
-// SGR is the subset of CSI escapes used for colors and text attributes; it's
-// the only state we carry across a soft-wrap boundary.
-var sgrPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // wrapLine splits line into chunks that each fit within b.content cells of
 // visible width. ANSI escape sequences are passed through unchanged and
@@ -217,9 +205,8 @@ func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
 		chunks     []lineChunk
 		current    bytes.Buffer
 		currentW   int
-		activeSGR  string // SGR code currently in effect at end of last completed chunk
+		activeSGR  string // SGR code in effect at end of last completed chunk; empty == reset
 		nextPrefix string // SGR to re-apply at the start of the next chunk
-		needsReset bool   // current chunk has unreset SGR state and must end with \x1b[0m
 	)
 
 	flush := func() {
@@ -227,19 +214,17 @@ func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
 			return
 		}
 		text := current.Bytes()
-		if needsReset {
+		if activeSGR != "" {
 			text = append(text, []byte("\x1b[0m")...)
 		}
 		// copy because the buffer is reused
-		chunk := lineChunk{
+		chunks = append(chunks, lineChunk{
 			prefix: nextPrefix,
 			text:   append([]byte(nil), text...),
 			width:  currentW,
-		}
-		chunks = append(chunks, chunk)
+		})
 		current.Reset()
 		currentW = 0
-		needsReset = false
 		// the next chunk starts with whatever SGR is currently active
 		nextPrefix = activeSGR
 	}
@@ -250,13 +235,13 @@ func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
 		if loc := ansiPattern.FindIndex(line[i:]); loc != nil && loc[0] == 0 {
 			esc := line[i : i+loc[1]]
 			current.Write(esc)
-			if sgrPattern.Match(esc) {
-				if string(esc) == "\x1b[0m" || string(esc) == "\x1b[m" {
+			// SGR is the CSI subset ending in 'm'; it's the only state we carry
+			// across a soft-wrap boundary.
+			if esc[len(esc)-1] == 'm' {
+				if s := string(esc); s == "\x1b[0m" || s == "\x1b[m" {
 					activeSGR = ""
-					needsReset = false
 				} else {
-					activeSGR = string(esc)
-					needsReset = true
+					activeSGR = s
 				}
 			}
 			i += loc[1]
@@ -295,32 +280,18 @@ func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
 }
 
 // getTerminalWidth returns the width in columns of the terminal backing w, or a
-// reasonable fallback if it cannot be determined.
+// reasonable fallback if it cannot be determined. Writers that implement
+// Width() int can override the detection (used by tests).
 func getTerminalWidth(w io.Writer) int {
+	if sized, ok := w.(interface{ Width() int }); ok {
+		if width := sized.Width(); width > 0 {
+			return width
+		}
+	}
 	if f, ok := w.(*os.File); ok {
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
 			return width
 		}
 	}
 	return 80
-}
-
-func repeat(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	var buf bytes.Buffer
-	buf.Grow(len(s) * n)
-	for range n {
-		buf.WriteString(s)
-	}
-	return buf.String()
-}
-
-func spaces(n int) string {
-	if n <= 0 {
-		return ""
-	}
-
-	return string(bytes.Repeat([]byte{' '}, n))
 }

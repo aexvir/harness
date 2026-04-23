@@ -10,13 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// borderBuffer is a minimal io.Writer that reports as a TTY so the
-// BorderWriter enables decoration during tests.
+// borderBuffer is a minimal io.Writer that reports as a TTY and exposes a
+// fixed terminal width so the BorderWriter enables decoration during tests.
 type borderBuffer struct {
 	bytes.Buffer
+	width int
 }
 
-func (*borderBuffer) IsTTY() bool { return true }
+func (*borderBuffer) IsTTY() bool  { return true }
+func (b *borderBuffer) Width() int { return b.width }
+
+// newBorderBuf returns a borderBuffer pre-configured with the given width,
+// so tests can construct a BorderWriter via the public NewBorderWriter
+// constructor while still controlling the terminal width.
+func newBorderBuf(width int) *borderBuffer { return &borderBuffer{width: width} }
 
 // withNoColor disables fatih/color's escape sequences for the duration of the
 // test so assertions can match plain strings.
@@ -58,9 +65,9 @@ func padded(line string, visibleLen, width int) string {
 
 func TestBorderWriter_NoOutputProducesNoBorder(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20)
 
-	bw := newBorderWriter(buf, 20)
+	bw := NewBorderWriter(buf)
 	require.NoError(t, bw.Close())
 
 	assert.Empty(t, buf.String(), "writer with no content must not render an empty card")
@@ -68,9 +75,9 @@ func TestBorderWriter_NoOutputProducesNoBorder(t *testing.T) {
 
 func TestBorderWriter_WrapsCompleteLines(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20)
 
-	bw := newBorderWriter(buf, 20)
+	bw := NewBorderWriter(buf)
 	_, err := bw.Write([]byte("hello\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -84,9 +91,9 @@ func TestBorderWriter_WrapsCompleteLines(t *testing.T) {
 
 func TestBorderWriter_BuffersPartialLinesAcrossWrites(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20)
 
-	bw := newBorderWriter(buf, 20)
+	bw := NewBorderWriter(buf)
 	_, err := bw.Write([]byte("hel"))
 	require.NoError(t, err)
 	// the partial write triggered the top border but not the line itself
@@ -103,9 +110,9 @@ func TestBorderWriter_BuffersPartialLinesAcrossWrites(t *testing.T) {
 
 func TestBorderWriter_FlushesPendingPartialLineOnClose(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20)
 
-	bw := newBorderWriter(buf, 20)
+	bw := NewBorderWriter(buf)
 	_, err := bw.Write([]byte("trailing"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -117,9 +124,9 @@ func TestBorderWriter_FlushesPendingPartialLineOnClose(t *testing.T) {
 
 func TestBorderWriter_HandlesMultipleLinesInSingleWrite(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20)
 
-	bw := newBorderWriter(buf, 20)
+	bw := NewBorderWriter(buf)
 	_, err := bw.Write([]byte("one\ntwo\nthree\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -133,9 +140,9 @@ func TestBorderWriter_HandlesMultipleLinesInSingleWrite(t *testing.T) {
 
 func TestBorderWriter_SoftWrapsLongLines(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20) // content width = 12
 
-	bw := newBorderWriter(buf, 20) // content width = 12
+	bw := NewBorderWriter(buf)
 	// 30 'x's split across rows of 12, 12, 6
 	long := strings.Repeat("x", 30)
 	_, err := bw.Write([]byte(long + "\n"))
@@ -151,9 +158,9 @@ func TestBorderWriter_SoftWrapsLongLines(t *testing.T) {
 
 func TestBorderWriter_SoftWrapCarriesSGRStateAcrossRows(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20) // content width = 12
 
-	bw := newBorderWriter(buf, 20) // content width = 12
+	bw := NewBorderWriter(buf)
 	// 20 visible chars all wrapped in red, no explicit reset until the end
 	red := strings.Repeat("x", 20)
 	_, err := bw.Write([]byte("\x1b[31m" + red + "\x1b[0m\n"))
@@ -179,9 +186,9 @@ func TestBorderWriter_SoftWrapCarriesSGRStateAcrossRows(t *testing.T) {
 
 func TestBorderWriter_SoftWrapStripsAnsiForWidth(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20) // content width = 12
 
-	bw := newBorderWriter(buf, 20) // content width = 12
+	bw := NewBorderWriter(buf)
 	// "hello" wrapped in red is 5 visible chars; should fit on a single row
 	_, err := bw.Write([]byte("\x1b[31mhello\x1b[0m\n"))
 	require.NoError(t, err)
@@ -194,9 +201,9 @@ func TestBorderWriter_SoftWrapStripsAnsiForWidth(t *testing.T) {
 
 func TestBorderWriter_CloseIsIdempotent(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(20)
 
-	bw := newBorderWriter(buf, 20)
+	bw := NewBorderWriter(buf)
 	_, err := bw.Write([]byte("hi\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -208,9 +215,9 @@ func TestBorderWriter_CloseIsIdempotent(t *testing.T) {
 
 func TestBorderWriter_DisabledWhenWidthTooSmall(t *testing.T) {
 	withNoColor(t)
-	buf := &borderBuffer{}
+	buf := newBorderBuf(5) // content would be negative
 
-	bw := newBorderWriter(buf, 5) // content would be negative
+	bw := NewBorderWriter(buf)
 	_, err := bw.Write([]byte("data\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
