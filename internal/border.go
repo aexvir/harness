@@ -65,15 +65,25 @@ type BorderWriter struct {
 // NewBorderWriter constructs a BorderWriter that draws a box around anything
 // written to it before forwarding to w.
 func NewBorderWriter(w io.Writer) *BorderWriter {
+	width := 0
+	if IsTerminalWriter(w) {
+		width = terminalWidth(w)
+	}
+	return newBorderWriter(w, width)
+}
+
+// newBorderWriter is the constructor used internally and by tests. A width of
+// zero (or a non-tty target) disables the border decoration.
+func newBorderWriter(w io.Writer, width int) *BorderWriter {
 	bw := &BorderWriter{
 		out:     w,
 		style:   defaultBorderStyle,
 		color:   color.New(color.FgHiBlack),
-		enabled: IsTerminalWriter(w),
+		enabled: width > 0 && IsTerminalWriter(w),
 	}
 
 	if bw.enabled {
-		bw.width = terminalWidth(w)
+		bw.width = width
 		// reserve: 1 space + 1 vertical + 1 space (padding) + content + 1 space + 1 vertical + 1 space
 		// layout is " │ <content> │"; left edge starts at column 2, right edge at second to last.
 		bw.content = bw.width - 6
