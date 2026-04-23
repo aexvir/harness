@@ -78,12 +78,12 @@ func NewBorderWriter(w io.Writer) *BorderWriter {
 
 // newBorderWriter is the constructor used internally and by tests. A width of
 // zero (or a non-tty target) disables the border decoration.
-func newBorderWriter(w io.Writer, width int) *BorderWriter {
+func newBorderWriter(writer io.Writer, width int) *BorderWriter {
 	bw := &BorderWriter{
-		out:     w,
+		out:     writer,
 		style:   defaultBorderStyle,
 		color:   color.New(color.FgHiBlack),
-		enabled: width > 0 && IsTerminalWriter(w),
+		enabled: width > 0 && IsTerminalWriter(writer),
 	}
 
 	if bw.enabled {
@@ -116,16 +116,39 @@ func (b *BorderWriter) Wrap(existing io.Writer) io.Writer {
 // the remaining one matches the leading space used elsewhere in the output.
 const leftIndent = "   "
 
-// emitTop writes the top border. It is invoked lazily on the first Write so
-// commands that produce no output don't render an empty card.
-func (b *BorderWriter) emitTop() {
-	if !b.enabled || b.started {
-		return
+// Write implements io.Writer. It buffers partial lines and emits each complete
+// line wrapped with the box border characters.
+func (b *BorderWriter) Write(text []byte) (int, error) {
+	if !b.enabled {
+		return b.out.Write(text)
 	}
-	b.started = true
 
-	line := b.style.TopLeft + repeat(b.style.Horizontal, b.width-6) + b.style.TopRight
-	fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
+	// lazy emit of the top border on the very first write
+	if !b.started {
+		line := b.style.TopLeft + repeat(b.style.Horizontal, b.width-6) + b.style.TopRight
+		fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
+		b.started = true
+	}
+
+	written := 0
+	for len(text) > 0 {
+		idx := bytes.IndexByte(text, '\n')
+		if idx < 0 {
+			b.pending.Write(text)
+			written += len(text)
+			break
+		}
+
+		// accumulate the line up to (but not including) the newline
+		b.pending.Write(text[:idx])
+		b.emitLine(b.pending.Bytes())
+		b.pending.Reset()
+
+		written += idx + 1
+		text = text[idx+1:]
+	}
+
+	return written, nil
 }
 
 // Close flushes any pending partial line and emits the bottom border. If no
@@ -152,39 +175,6 @@ func (b *BorderWriter) Close() error {
 	line := b.style.BottomLeft + repeat(b.style.Horizontal, b.width-6) + b.style.BottomRight
 	fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
 	return nil
-}
-
-// Write implements io.Writer. It buffers partial lines and emits each complete
-// line wrapped with the box border characters.
-func (b *BorderWriter) Write(p []byte) (int, error) {
-	if !b.enabled {
-		return b.out.Write(p)
-	}
-
-	// lazy emit of the top border on the very first write
-	if !b.started {
-		b.emitTop()
-	}
-
-	written := 0
-	for len(p) > 0 {
-		idx := bytes.IndexByte(p, '\n')
-		if idx < 0 {
-			b.pending.Write(p)
-			written += len(p)
-			break
-		}
-
-		// accumulate the line up to (but not including) the newline
-		b.pending.Write(p[:idx])
-		b.emitLine(b.pending.Bytes())
-		b.pending.Reset()
-
-		written += idx + 1
-		p = p[idx+1:]
-	}
-
-	return written, nil
 }
 
 // emitLine prints a single content line surrounded by the vertical border
