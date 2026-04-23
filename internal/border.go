@@ -13,9 +13,9 @@ import (
 	"golang.org/x/term"
 )
 
-// borderStyle holds the unicode characters used to draw the box around
+// borders holds the unicode characters used to draw the box around
 // command output.
-type borderStyle struct {
+type borders struct {
 	TopLeft     string
 	TopRight    string
 	BottomLeft  string
@@ -24,7 +24,7 @@ type borderStyle struct {
 	Vertical    string
 }
 
-var defaultBorderStyle = borderStyle{
+var defaultBorderStyle = borders{
 	TopLeft:     "╭",
 	TopRight:    "╮",
 	BottomLeft:  "╰",
@@ -55,15 +55,15 @@ var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07`
 //	cmd.Stderr = bw
 //	_ = cmd.Run()
 type BorderWriter struct {
-	out      io.Writer
-	style    borderStyle
-	color    *color.Color
-	width    int  // total terminal width
-	content  int  // inner width available for content
-	enabled  bool // false when output is not a terminal
-	started  bool
-	closed   bool
-	pending  bytes.Buffer // current partial line not yet terminated by \n
+	out     io.Writer
+	style   borders
+	color   *color.Color
+	width   int  // total terminal width
+	content int  // inner width available for content
+	enabled bool // false when output is not a terminal
+	started bool
+	closed  bool
+	pending bytes.Buffer // current partial line not yet terminated by \n
 }
 
 // NewBorderWriter constructs a BorderWriter that draws a box around anything
@@ -71,7 +71,7 @@ type BorderWriter struct {
 func NewBorderWriter(w io.Writer) *BorderWriter {
 	width := 0
 	if IsTerminalWriter(w) {
-		width = terminalWidth(w)
+		width = getTerminalWidth(w)
 	}
 	return newBorderWriter(w, width)
 }
@@ -224,12 +224,12 @@ var sgrPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 // that did not already end with one.
 func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
 	var (
-		chunks      []lineChunk
-		current     bytes.Buffer
-		currentW    int
-		activeSGR   string // SGR code currently in effect at end of last completed chunk
-		nextPrefix  string // SGR to re-apply at the start of the next chunk
-		needsReset  bool   // current chunk has unreset SGR state and must end with \x1b[0m
+		chunks     []lineChunk
+		current    bytes.Buffer
+		currentW   int
+		activeSGR  string // SGR code currently in effect at end of last completed chunk
+		nextPrefix string // SGR to re-apply at the start of the next chunk
+		needsReset bool   // current chunk has unreset SGR state and must end with \x1b[0m
 	)
 
 	flush := func() {
@@ -304,9 +304,9 @@ func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
 	return chunks
 }
 
-// terminalWidth returns the width in columns of the terminal backing w, or a
+// getTerminalWidth returns the width in columns of the terminal backing w, or a
 // reasonable fallback if it cannot be determined.
-func terminalWidth(w io.Writer) int {
+func getTerminalWidth(w io.Writer) int {
 	if f, ok := w.(*os.File); ok {
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
 			return width
@@ -331,5 +331,6 @@ func spaces(n int) string {
 	if n <= 0 {
 		return ""
 	}
+
 	return string(bytes.Repeat([]byte{' '}, n))
 }
