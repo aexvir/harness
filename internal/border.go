@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"unicode/utf8"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-runewidth"
@@ -177,24 +178,120 @@ func (b *BorderWriter) Write(p []byte) (int, error) {
 }
 
 // emitLine prints a single content line surrounded by the vertical border
-// characters. Lines wider than the available content width are emitted without
-// a right border to avoid breaking ANSI escape sequences mid-stream; the
-// terminal will visually wrap them.
+// characters. Lines wider than the available content width are soft-wrapped
+// across multiple rows; the active SGR style is carried over so colored
+// output continues correctly across the wrap, and a reset is emitted before
+// the right border so the border itself is never colored by the content.
 func (b *BorderWriter) emitLine(line []byte) {
 	left := leftIndent + b.color.Sprint(b.style.Vertical) + " "
+	right := " " + b.color.Sprint(b.style.Vertical)
 
-	// strip ansi codes for width measurement only
-	visible := ansiPattern.ReplaceAll(line, nil)
-	w := runewidth.StringWidth(string(visible))
+	for _, chunk := range b.wrapLine(line) {
+		pad := b.content - chunk.width
+		if pad < 0 {
+			pad = 0
+		}
+		fmt.Fprintf(b.out, "%s%s%s%s%s\n", left, chunk.prefix, chunk.text, spaces(pad), right) //nolint:errcheck
+	}
+}
 
-	if w > b.content {
-		fmt.Fprintf(b.out, "%s%s\n", left, line) //nolint:errcheck
-		return
+// lineChunk is one row's worth of wrapped content.
+type lineChunk struct {
+	prefix string // active SGR style carried over from a previous row, "" for the first
+	text   []byte // raw bytes (possibly containing ANSI sequences) to emit for this row
+	width  int    // visible width in cells of text
+}
+
+// sgrPattern matches a Select Graphic Rendition (SGR) escape sequence.
+// SGR is the subset of CSI escapes used for colors and text attributes; it's
+// the only state we carry across a soft-wrap boundary.
+var sgrPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// wrapLine splits line into chunks that each fit within b.content cells of
+// visible width. ANSI escape sequences are passed through unchanged and
+// excluded from the width count; SGR state from a previous row is re-emitted
+// at the start of the next, and a reset is appended at the end of any row
+// that did not already end with one.
+func (b *BorderWriter) wrapLine(line []byte) []lineChunk {
+	var (
+		chunks      []lineChunk
+		current     bytes.Buffer
+		currentW    int
+		activeSGR   string // SGR code currently in effect at end of last completed chunk
+		nextPrefix  string // SGR to re-apply at the start of the next chunk
+		needsReset  bool   // current chunk has unreset SGR state and must end with \x1b[0m
+	)
+
+	flush := func() {
+		if current.Len() == 0 && nextPrefix == "" {
+			return
+		}
+		text := current.Bytes()
+		if needsReset {
+			text = append(text, []byte("\x1b[0m")...)
+		}
+		// copy because the buffer is reused
+		chunk := lineChunk{
+			prefix: nextPrefix,
+			text:   append([]byte(nil), text...),
+			width:  currentW,
+		}
+		chunks = append(chunks, chunk)
+		current.Reset()
+		currentW = 0
+		needsReset = false
+		// the next chunk starts with whatever SGR is currently active
+		nextPrefix = activeSGR
 	}
 
-	pad := b.content - w
-	right := " " + b.color.Sprint(b.style.Vertical)
-	fmt.Fprintf(b.out, "%s%s%s%s\n", left, line, spaces(pad), right) //nolint:errcheck
+	for i := 0; i < len(line); {
+		// detect ANSI escape sequences and pass them through without counting
+		// their visible width; SGR sequences also update the active style.
+		if loc := ansiPattern.FindIndex(line[i:]); loc != nil && loc[0] == 0 {
+			esc := line[i : i+loc[1]]
+			current.Write(esc)
+			if sgrPattern.Match(esc) {
+				if string(esc) == "\x1b[0m" || string(esc) == "\x1b[m" {
+					activeSGR = ""
+					needsReset = false
+				} else {
+					activeSGR = string(esc)
+					needsReset = true
+				}
+			}
+			i += loc[1]
+			continue
+		}
+
+		// decode one rune and measure its display width
+		r, size := utf8.DecodeRune(line[i:])
+		w := runewidth.RuneWidth(r)
+		if w == 0 {
+			// zero-width rune (combining mark, ZWJ, etc.) — append without
+			// flushing; it logically belongs to the previous grapheme.
+			current.Write(line[i : i+size])
+			i += size
+			continue
+		}
+
+		// would this rune overflow the row? flush first.
+		if currentW+w > b.content && currentW > 0 {
+			flush()
+		}
+
+		current.Write(line[i : i+size])
+		currentW += w
+		i += size
+	}
+
+	flush()
+
+	if len(chunks) == 0 {
+		// preserve the empty-line case so we still render an empty bordered row
+		chunks = append(chunks, lineChunk{})
+	}
+
+	return chunks
 }
 
 // terminalWidth returns the width in columns of the terminal backing w, or a

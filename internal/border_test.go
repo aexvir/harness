@@ -131,34 +131,64 @@ func TestBorderWriter_HandlesMultipleLinesInSingleWrite(t *testing.T) {
 	assert.Equal(t, indent+"│ "+padded("three", 5, 20)+" │", lines[3])
 }
 
-func TestBorderWriter_LongLineSkipsRightBorder(t *testing.T) {
+func TestBorderWriter_SoftWrapsLongLines(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 20)
+	bw := newBorderWriter(buf, 20) // content width = 12
+	// 30 'x's split across rows of 12, 12, 6
 	long := strings.Repeat("x", 30)
 	_, err := bw.Write([]byte(long + "\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
 
 	lines := splitLines(buf.String())
-	require.Len(t, lines, 3)
-	assert.Equal(t, indent+"│ "+long, lines[1], "overflowing line must skip right border")
+	require.Len(t, lines, 5, "expected top border + 3 wrapped rows + bottom border")
+	assert.Equal(t, indent+"│ "+padded(strings.Repeat("x", 12), 12, 20)+" │", lines[1])
+	assert.Equal(t, indent+"│ "+padded(strings.Repeat("x", 12), 12, 20)+" │", lines[2])
+	assert.Equal(t, indent+"│ "+padded(strings.Repeat("x", 6), 6, 20)+" │", lines[3])
 }
 
-func TestBorderWriter_StripsAnsiForWidth(t *testing.T) {
+func TestBorderWriter_SoftWrapCarriesSGRStateAcrossRows(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 20)
-	// "hello" is 5 visible chars, surrounded by ANSI escapes
+	bw := newBorderWriter(buf, 20) // content width = 12
+	// 20 visible chars all wrapped in red, no explicit reset until the end
+	red := strings.Repeat("x", 20)
+	_, err := bw.Write([]byte("\x1b[31m" + red + "\x1b[0m\n"))
+	require.NoError(t, err)
+	require.NoError(t, bw.Close())
+
+	lines := splitLines(buf.String())
+	require.Len(t, lines, 4, "expected top border + 2 wrapped rows + bottom border")
+
+	// first row: opens SGR, fills 12 cells, ends with reset before right border
+	assert.Equal(
+		t,
+		indent+"│ "+"\x1b[31m"+strings.Repeat("x", 12)+"\x1b[0m"+padded("", 12, 20)+" │",
+		lines[1],
+	)
+	// second row: re-applies the SGR carried over, has the explicit reset from the input
+	assert.Equal(
+		t,
+		indent+"│ "+"\x1b[31m"+strings.Repeat("x", 8)+"\x1b[0m"+padded("", 8, 20)+" │",
+		lines[2],
+	)
+}
+
+func TestBorderWriter_SoftWrapStripsAnsiForWidth(t *testing.T) {
+	withNoColor(t)
+	buf := &borderBuffer{}
+
+	bw := newBorderWriter(buf, 20) // content width = 12
+	// "hello" wrapped in red is 5 visible chars; should fit on a single row
 	_, err := bw.Write([]byte("\x1b[31mhello\x1b[0m\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
-	// padding must be computed from the visible width (5), not the raw byte length
 	assert.Equal(t, indent+"│ "+padded("\x1b[31mhello\x1b[0m", 5, 20)+" │", lines[1])
 }
 
