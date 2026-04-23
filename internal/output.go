@@ -85,15 +85,13 @@ func LogErrorItem(text string) {
 }
 
 // LogStatus writes an indented status indicator based on whether err is nil.
-// Unlike LogSuccess/LogError, this does not append a newline, allowing the
-// caller to control line termination.
 func LogStatus(text string, err error) {
 	if err != nil {
-		color.New(color.FgRed).Fprintf(Output, "     %s %s", Symbols.Error, text) //nolint:errcheck
+		color.New(color.FgRed).Fprintf(Output, "     %s %s\n", Symbols.Error, text) //nolint:errcheck
 		return
 	}
 
-	color.New(color.FgGreen).Fprintf(Output, "     %s %s", Symbols.Success, text) //nolint:errcheck
+	color.New(color.FgGreen).Fprintf(Output, "     %s %s\n", Symbols.Success, text) //nolint:errcheck
 }
 
 // LogMessage writes a line in the specified color without any symbol prefix.
