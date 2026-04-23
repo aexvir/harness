@@ -101,6 +101,16 @@ func newBorderWriter(w io.Writer, width int) *BorderWriter {
 	return bw
 }
 
+// Wrap returns a writer that forwards output to b, while preserving any
+// user-provided writer (other than os.Stdout/os.Stderr or b's own output sink,
+// which would cause duplicate output).
+func (b *BorderWriter) Wrap(existing io.Writer) io.Writer {
+	if existing == nil || existing == os.Stdout || existing == os.Stderr || existing == b.out {
+		return b
+	}
+	return io.MultiWriter(existing, b)
+}
+
 // leftIndent is the number of blank columns rendered before the left border
 // character. Two of these align the box content with the harness step text;
 // the remaining one matches the leading space used elsewhere in the output.
