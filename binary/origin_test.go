@@ -2,7 +2,10 @@ package binary
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"io"
 	"io/fs"
 	"net/http"
@@ -10,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -299,6 +303,170 @@ func TestRemoteArchiveDownloadOrigin(t *testing.T) {
 			assert.NoFileExists(t, filepath.Join(dir, "util"))
 		},
 	)
+}
+
+func TestChecksumVerification(t *testing.T) {
+	here := Platform{OS: runtime.GOOS, Arch: runtime.GOARCH}
+
+	t.Run("binary download passes with correct hash",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			tmpl := mktemplate(t.TempDir(), "util", "1.2.3")
+
+			origin := RemoteBinaryDownload(
+				srv.URL+"/util",
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.SHA256, Value: sha256hex(t, "testdata/util")},
+				}),
+			)
+
+			require.NoError(t, origin.Install(tmpl))
+			assert.FileExists(t, tmpl.Cmd)
+		},
+	)
+
+	t.Run("binary download fails and removes file on hash mismatch",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			tmpl := mktemplate(t.TempDir(), "util", "1.2.3")
+
+			origin := RemoteBinaryDownload(
+				srv.URL+"/util",
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.SHA256, Value: "0000000000000000000000000000000000000000000000000000000000000000"},
+				}),
+			)
+
+			err := origin.Install(tmpl)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "checksum mismatch")
+			assert.NoFileExists(t, tmpl.Cmd)
+		},
+	)
+
+	t.Run("binary download accepts uppercase hex",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			tmpl := mktemplate(t.TempDir(), "util", "1.2.3")
+
+			origin := RemoteBinaryDownload(
+				srv.URL+"/util",
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.SHA256, Value: strings.ToUpper(sha256hex(t, "testdata/util"))},
+				}),
+			)
+
+			require.NoError(t, origin.Install(tmpl))
+		},
+	)
+
+	t.Run("binary download skips verification when platform not in map",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			tmpl := mktemplate(t.TempDir(), "util", "1.2.3")
+
+			// map contains a fake platform that will never match the runtime
+			origin := RemoteBinaryDownload(
+				srv.URL+"/util",
+				WithChecksums(map[Platform]Checksum{
+					{OS: "plan9", Arch: "mips"}: {Algorithm: crypto.SHA256, Value: "deadbeef"},
+				}),
+			)
+
+			require.NoError(t, origin.Install(tmpl))
+			assert.FileExists(t, tmpl.Cmd)
+		},
+	)
+
+	t.Run("archive download passes with correct hash",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			tmpl := mktemplate(t.TempDir(), "util", "1.2.3")
+
+			origin := RemoteArchiveDownload(
+				srv.URL+"/util.tar.gz",
+				map[string]string{"util": "util"},
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.SHA256, Value: sha256hex(t, "testdata/util.tar.gz")},
+				}),
+			)
+
+			require.NoError(t, origin.Install(tmpl))
+			assert.FileExists(t, filepath.Join(tmpl.Directory, "util"))
+		},
+	)
+
+	t.Run("archive download fails and removes file on hash mismatch",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			dir := t.TempDir()
+			tmpl := mktemplate(dir, "util", "1.2.3")
+
+			origin := RemoteArchiveDownload(
+				srv.URL+"/util.tar.gz",
+				map[string]string{"util": "util"},
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.SHA256, Value: "whatever"},
+				}),
+			)
+
+			err := origin.Install(tmpl)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "checksum mismatch")
+			assert.NoFileExists(t, filepath.Join(dir, "util.tar.gz"))
+			assert.NoFileExists(t, filepath.Join(dir, "util"))
+		},
+	)
+
+	t.Run("archive download re-downloads when cached file has bad hash",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			dir := t.TempDir()
+			tmpl := mktemplate(dir, "util", "1.2.3")
+
+			// pre-place a corrupt archive where the download would be cached
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "util.tar.gz"), []byte("corrupt"), 0o644))
+
+			origin := RemoteArchiveDownload(
+				srv.URL+"/util.tar.gz",
+				map[string]string{"util": "util"},
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.SHA256, Value: sha256hex(t, "testdata/util.tar.gz")},
+				}),
+			)
+
+			require.NoError(t, origin.Install(tmpl))
+			assert.FileExists(t, filepath.Join(dir, "util"))
+		},
+	)
+
+	t.Run("unsupported hash algorithm errors clearly",
+		func(t *testing.T) {
+			srv := setupTestServer(t)
+			tmpl := mktemplate(t.TempDir(), "util", "1.2.3")
+
+			origin := RemoteBinaryDownload(
+				srv.URL+"/util",
+				WithChecksums(map[Platform]Checksum{
+					here: {Algorithm: crypto.Hash(99), Value: "deadbeef"},
+				}),
+			)
+
+			err := origin.Install(tmpl)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "not available")
+		},
+	)
+}
+
+func sha256hex(t *testing.T, path string) string {
+	t.Helper()
+
+	data, err := testdata.ReadFile(path)
+	require.NoError(t, err)
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:])
 }
 
 func TestProgressDisablesOnNonTerminalOutput(t *testing.T) {

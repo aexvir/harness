@@ -27,15 +27,23 @@ type Origin interface {
 // It supports downloading a single executable file from a remote location.
 type remotebin struct {
 	urlformat string
+	config    origincfg
 }
 
 // RemoteBinaryDownload creates a new Origin that downloads a binary directly from a URL.
 // The URL can contain template variables that will be resolved using the [Template] values
 // during installation.
 // e.g. "https://github.com/foo/bar/releases/download/v{{.Version}}/bin_{{.Version}}_{{.GOOS}}_{{.GOARCH}}{{.Extension}}",
-func RemoteBinaryDownload(url string) Origin {
+//
+// Pass [WithChecksums] to verify the downloaded file against a known hash.
+func RemoteBinaryDownload(url string, options ...OriginOption) Origin {
+	var cfg origincfg
+	for _, opt := range options {
+		opt(&cfg)
+	}
 	return &remotebin{
 		urlformat: url,
+		config:    cfg,
 	}
 }
 
@@ -68,6 +76,16 @@ func (r *remotebin) Install(template Template) error {
 	data, finish := progress(resp.Body, resp.ContentLength)
 	defer finish()
 
+	var verify func() error
+	if sum, ok := r.config.checksum(template); ok {
+		verified, check, err := crcreader(data, sum)
+		if err != nil {
+			return err
+		}
+		data = verified
+		verify = check
+	}
+
 	out, err := os.Create(template.Cmd)
 	if err != nil {
 		return fmt.Errorf("failed to create output file %s: %w", template.Cmd, err)
@@ -82,8 +100,18 @@ func (r *remotebin) Install(template Template) error {
 		return fmt.Errorf("failed to set permissions on %s: %w", template.Cmd, err)
 	}
 
-	_, err = io.Copy(out, data)
-	return err
+	if _, err := io.Copy(out, data); err != nil {
+		return err
+	}
+
+	if verify != nil {
+		if err := verify(); err != nil {
+			_ = os.Remove(template.Cmd)
+			return err
+		}
+	}
+
+	return nil
 }
 
 // remotearchive implements Origin for downloading and extracting archived binaries.
@@ -92,6 +120,7 @@ func (r *remotebin) Install(template Template) error {
 type remotearchive struct {
 	urlformat string
 	binaries  map[string]string
+	config    origincfg
 }
 
 // RemoteArchiveDownload creates a new Origin that downloads and extracts binaries from
@@ -107,10 +136,17 @@ type remotearchive struct {
 // e.g. {"grafana-v{{.Version}}/bin/grafana-server": "grafana"} will resolve the path by replacing
 // the version in the string and will extract the file under that path to a binary called simply
 // "grafana" in the root of the bin directory.
-func RemoteArchiveDownload(url string, binaries map[string]string) Origin {
+//
+// Pass [WithChecksums] to verify the downloaded archive against a known hash.
+func RemoteArchiveDownload(url string, binaries map[string]string, options ...OriginOption) Origin {
+	var cfg origincfg
+	for _, opt := range options {
+		opt(&cfg)
+	}
 	return &remotearchive{
 		urlformat: url,
 		binaries:  binaries,
+		config:    cfg,
 	}
 }
 
@@ -126,7 +162,12 @@ func (r *remotearchive) Install(template Template) error {
 
 	tmpname := filepath.Base(url)
 
-	if err := download(url, filepath.Join(template.Directory, tmpname)); err != nil {
+	var sum *Checksum
+	if expected, ok := r.config.checksum(template); ok {
+		sum = &expected
+	}
+
+	if err := download(url, filepath.Join(template.Directory, tmpname), sum); err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
 
@@ -203,7 +244,9 @@ func (o *gopkg) Install(template Template) error {
 
 // download downloads a file from a URL to a local destination.
 // If the destination file already exists, the download is skipped.
-func download(url, destination string) (err error) {
+// When sum is non-nil, the downloaded (or cached) file is verified against it.
+// A cached file that does not match is removed and re-downloaded.
+func download(url, destination string, sum *Checksum) (err error) {
 	internal.LogDetail(fmt.Sprintf("downloading %s to %s", url, destination))
 
 	start := time.Now()
@@ -213,7 +256,16 @@ func download(url, destination string) (err error) {
 	}()
 
 	if _, err := os.Stat(destination); err == nil {
-		return nil
+		if sum == nil {
+			return nil
+		}
+		if verr := crcfile(destination, *sum); verr == nil {
+			return nil
+		}
+		internal.LogDetail("cached file failed checksum verification, re-downloading")
+		if rmerr := os.Remove(destination); rmerr != nil {
+			return fmt.Errorf("failed to remove invalid cached file %s: %w", destination, rmerr)
+		}
 	}
 
 	resp, err := http.Get(url)
@@ -233,6 +285,16 @@ func download(url, destination string) (err error) {
 	data, finish := progress(resp.Body, resp.ContentLength)
 	defer finish()
 
+	var verify func() error
+	if sum != nil {
+		verified, check, err := crcreader(data, *sum)
+		if err != nil {
+			return err
+		}
+		data = verified
+		verify = check
+	}
+
 	out, err := os.Create(destination)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", destination, err)
@@ -243,9 +305,15 @@ func download(url, destination string) (err error) {
 		}
 	}()
 
-	_, err = io.Copy(out, data)
-	if err != nil {
+	if _, err := io.Copy(out, data); err != nil {
 		return fmt.Errorf("failed to copy data to file %s: %w", destination, err)
+	}
+
+	if verify != nil {
+		if verr := verify(); verr != nil {
+			_ = os.Remove(destination)
+			return verr
+		}
 	}
 
 	return nil
@@ -323,4 +391,41 @@ func progress(reader io.Reader, size int64) (io.Reader, func()) {
 		Start()
 
 	return bar.NewProxyReader(reader), func() { bar.Finish() }
+}
+
+// OriginOption configures optional behavior for an [Origin].
+type OriginOption func(*origincfg)
+
+// origincfg accumulates optional configuration shared across origins.
+type origincfg struct {
+	checksums map[Platform]Checksum
+}
+
+// WithChecksums enables integrity verification of the downloaded file
+// using known hashes keyed by platform.
+//
+// If the current platform is not present in the map, verification is
+// skipped for that install. On a mismatch, the downloaded file is removed
+// and an error is returned.
+//
+// example:
+//
+//	binary.RemoteBinaryDownload(
+//		"https://example.com/bin_{{.GOOS}}_{{.GOARCH}}",
+//		binary.WithChecksums(map[binary.Platform]binary.Checksum{
+//			{OS: "darwin", Arch: "arm64"}: {Algorithm: crypto.SHA256, Value: "abc..."},
+//			{OS: "linux",  Arch: "amd64"}: {Algorithm: crypto.SHA256, Value: "def..."},
+//		}),
+//	)
+func WithChecksums(checksums map[Platform]Checksum) OriginOption {
+	return func(c *origincfg) {
+		c.checksums = checksums
+	}
+}
+
+// checksum returns the checksum configured for the current template's
+// platform, if any.
+func (c origincfg) checksum(t Template) (Checksum, bool) {
+	sum, ok := c.checksums[Platform{OS: t.GOOS, Arch: t.GOARCH}]
+	return sum, ok
 }
