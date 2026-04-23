@@ -42,14 +42,17 @@ var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07`
 // When the underlying writer is not a terminal the BorderWriter acts as a
 // transparent pass-through; this keeps CI logs and piped output clean.
 //
+// The top border is emitted lazily on the first Write, and the bottom border
+// on Close. Commands that produce no output therefore don't render an empty
+// card; the BorderWriter only decorates output that actually exists.
+//
 // Typical usage:
 //
 //	bw := internal.NewBorderWriter(os.Stdout)
-//	bw.Start()
+//	defer bw.Close()
 //	cmd.Stdout = bw
 //	cmd.Stderr = bw
 //	_ = cmd.Run()
-//	bw.Close()
 type BorderWriter struct {
 	out      io.Writer
 	style    borderStyle
@@ -102,8 +105,9 @@ func newBorderWriter(w io.Writer, width int) *BorderWriter {
 // the remaining one matches the leading space used elsewhere in the output.
 const leftIndent = "   "
 
-// Start emits the top border. Safe to call multiple times.
-func (b *BorderWriter) Start() {
+// emitTop writes the top border. It is invoked lazily on the first Write so
+// commands that produce no output don't render an empty card.
+func (b *BorderWriter) emitTop() {
 	if !b.enabled || b.started {
 		return
 	}
@@ -113,7 +117,9 @@ func (b *BorderWriter) Start() {
 	fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
 }
 
-// Close flushes any pending partial line and emits the bottom border.
+// Close flushes any pending partial line and emits the bottom border. If no
+// content was ever written the bottom border is skipped, so silent commands
+// don't produce an empty card.
 // Safe to call multiple times.
 func (b *BorderWriter) Close() error {
 	if !b.enabled || b.closed {
@@ -125,6 +131,11 @@ func (b *BorderWriter) Close() error {
 	if b.pending.Len() > 0 {
 		b.emitLine(b.pending.Bytes())
 		b.pending.Reset()
+	}
+
+	// nothing was ever written; skip the bottom border to avoid an empty card.
+	if !b.started {
+		return nil
 	}
 
 	line := b.style.BottomLeft + repeat(b.style.Horizontal, b.width-6) + b.style.BottomRight
@@ -139,9 +150,9 @@ func (b *BorderWriter) Write(p []byte) (int, error) {
 		return b.out.Write(p)
 	}
 
-	// lazy start so callers don't have to remember
+	// lazy emit of the top border on the very first write
 	if !b.started {
-		b.Start()
+		b.emitTop()
 	}
 
 	written := 0

@@ -87,13 +87,14 @@ func (r *TaskRunner) Exec() error {
 	}
 
 	// wrap the command stdout/stderr writers with a shared border writer so the
-	// command output is visually separated from the harness output
+	// command output is visually separated from the harness output. the border
+	// is rendered lazily on the first write, so commands that produce no output
+	// don't get an empty card.
 	var border *internal.BorderWriter
 	if !r.quiet {
 		border = internal.NewBorderWriter(internal.Output)
 		r.cmd.Stdout = wrapWithBorder(r.cmd.Stdout, border)
 		r.cmd.Stderr = wrapWithBorder(r.cmd.Stderr, border)
-		border.Start()
 		defer border.Close() //nolint:errcheck
 	}
 

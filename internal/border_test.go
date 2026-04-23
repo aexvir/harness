@@ -32,7 +32,6 @@ func TestBorderWriter_PassThroughWhenNotTTY(t *testing.T) {
 	var buf bytes.Buffer
 
 	bw := NewBorderWriter(&buf) // bytes.Buffer is not a TTY
-	bw.Start()
 	_, err := bw.Write([]byte("hello\nworld\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -57,18 +56,14 @@ func padded(line string, visibleLen, width int) string {
 	return line + strings.Repeat(" ", pad)
 }
 
-func TestBorderWriter_RendersTopAndBottomBorder(t *testing.T) {
+func TestBorderWriter_NoOutputProducesNoBorder(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	require.NoError(t, bw.Close())
 
-	lines := splitLines(buf.String())
-	require.Len(t, lines, 2)
-	assert.Equal(t, indent+"╭"+strings.Repeat("─", 20-6)+"╮", lines[0])
-	assert.Equal(t, indent+"╰"+strings.Repeat("─", 20-6)+"╯", lines[1])
+	assert.Empty(t, buf.String(), "writer with no content must not render an empty card")
 }
 
 func TestBorderWriter_WrapsCompleteLines(t *testing.T) {
@@ -76,14 +71,15 @@ func TestBorderWriter_WrapsCompleteLines(t *testing.T) {
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	_, err := bw.Write([]byte("hello\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
+	assert.Equal(t, indent+"╭"+strings.Repeat("─", 20-6)+"╮", lines[0])
 	assert.Equal(t, indent+"│ "+padded("hello", 5, 20)+" │", lines[1])
+	assert.Equal(t, indent+"╰"+strings.Repeat("─", 20-6)+"╯", lines[2])
 }
 
 func TestBorderWriter_BuffersPartialLinesAcrossWrites(t *testing.T) {
@@ -91,10 +87,9 @@ func TestBorderWriter_BuffersPartialLinesAcrossWrites(t *testing.T) {
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	_, err := bw.Write([]byte("hel"))
 	require.NoError(t, err)
-	// after a partial write only the top border should be present
+	// the partial write triggered the top border but not the line itself
 	assert.Equal(t, 1, strings.Count(buf.String(), "\n"), "partial line must not be flushed yet")
 
 	_, err = bw.Write([]byte("lo\n"))
@@ -111,7 +106,6 @@ func TestBorderWriter_FlushesPendingPartialLineOnClose(t *testing.T) {
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	_, err := bw.Write([]byte("trailing"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -126,7 +120,6 @@ func TestBorderWriter_HandlesMultipleLinesInSingleWrite(t *testing.T) {
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	_, err := bw.Write([]byte("one\ntwo\nthree\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
@@ -143,7 +136,6 @@ func TestBorderWriter_LongLineSkipsRightBorder(t *testing.T) {
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	long := strings.Repeat("x", 30)
 	_, err := bw.Write([]byte(long + "\n"))
 	require.NoError(t, err)
@@ -159,7 +151,6 @@ func TestBorderWriter_StripsAnsiForWidth(t *testing.T) {
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	bw.Start()
 	// "hello" is 5 visible chars, surrounded by ANSI escapes
 	_, err := bw.Write([]byte("\x1b[31mhello\x1b[0m\n"))
 	require.NoError(t, err)
@@ -171,29 +162,13 @@ func TestBorderWriter_StripsAnsiForWidth(t *testing.T) {
 	assert.Equal(t, indent+"│ "+padded("\x1b[31mhello\x1b[0m", 5, 20)+" │", lines[1])
 }
 
-func TestBorderWriter_LazyStartOnFirstWrite(t *testing.T) {
+func TestBorderWriter_CloseIsIdempotent(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
 	bw := newBorderWriter(buf, 20)
-	// no explicit Start
 	_, err := bw.Write([]byte("hi\n"))
 	require.NoError(t, err)
-	require.NoError(t, bw.Close())
-
-	lines := splitLines(buf.String())
-	require.Len(t, lines, 3, "Start should have been triggered automatically on first write")
-	assert.Contains(t, lines[0], "╭")
-	assert.Contains(t, lines[2], "╰")
-}
-
-func TestBorderWriter_StartAndCloseAreIdempotent(t *testing.T) {
-	withNoColor(t)
-	buf := &borderBuffer{}
-
-	bw := newBorderWriter(buf, 20)
-	bw.Start()
-	bw.Start()
 	require.NoError(t, bw.Close())
 	require.NoError(t, bw.Close())
 
@@ -205,8 +180,7 @@ func TestBorderWriter_DisabledWhenWidthTooSmall(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 5) // content would be -1
-	bw.Start()
+	bw := newBorderWriter(buf, 5) // content would be negative
 	_, err := bw.Write([]byte("data\n"))
 	require.NoError(t, err)
 	require.NoError(t, bw.Close())
