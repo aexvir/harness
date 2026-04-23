@@ -84,9 +84,10 @@ func newBorderWriter(w io.Writer, width int) *BorderWriter {
 
 	if bw.enabled {
 		bw.width = width
-		// reserve: 1 space + 1 vertical + 1 space (padding) + content + 1 space + 1 vertical + 1 space
-		// layout is " │ <content> │"; left edge starts at column 2, right edge at second to last.
-		bw.content = bw.width - 6
+		// layout is "   │ <content> │"; left edge at column 4 (aligned with the
+		// harness LogStep/LogCommand text), right edge at the second-to-last column.
+		// reservation: 3 leading spaces + 1 vertical + 1 space + content + 1 space + 1 vertical + 1 trailing column = width
+		bw.content = bw.width - 8
 		if bw.content < 1 {
 			// terminal too narrow; disable decoration to avoid garbled output
 			bw.enabled = false
@@ -96,6 +97,11 @@ func newBorderWriter(w io.Writer, width int) *BorderWriter {
 	return bw
 }
 
+// leftIndent is the number of blank columns rendered before the left border
+// character. Two of these align the box content with the harness step text;
+// the remaining one matches the leading space used elsewhere in the output.
+const leftIndent = "   "
+
 // Start emits the top border. Safe to call multiple times.
 func (b *BorderWriter) Start() {
 	if !b.enabled || b.started {
@@ -103,8 +109,8 @@ func (b *BorderWriter) Start() {
 	}
 	b.started = true
 
-	line := b.style.TopLeft + repeat(b.style.Horizontal, b.width-4) + b.style.TopRight
-	fmt.Fprintln(b.out, " "+b.color.Sprint(line)) //nolint:errcheck
+	line := b.style.TopLeft + repeat(b.style.Horizontal, b.width-6) + b.style.TopRight
+	fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
 }
 
 // Close flushes any pending partial line and emits the bottom border.
@@ -121,8 +127,8 @@ func (b *BorderWriter) Close() error {
 		b.pending.Reset()
 	}
 
-	line := b.style.BottomLeft + repeat(b.style.Horizontal, b.width-4) + b.style.BottomRight
-	fmt.Fprintln(b.out, " "+b.color.Sprint(line)) //nolint:errcheck
+	line := b.style.BottomLeft + repeat(b.style.Horizontal, b.width-6) + b.style.BottomRight
+	fmt.Fprintln(b.out, leftIndent+b.color.Sprint(line)) //nolint:errcheck
 	return nil
 }
 
@@ -164,7 +170,7 @@ func (b *BorderWriter) Write(p []byte) (int, error) {
 // a right border to avoid breaking ANSI escape sequences mid-stream; the
 // terminal will visually wrap them.
 func (b *BorderWriter) emitLine(line []byte) {
-	left := " " + b.color.Sprint(b.style.Vertical) + " "
+	left := leftIndent + b.color.Sprint(b.style.Vertical) + " "
 
 	// strip ansi codes for width measurement only
 	visible := ansiPattern.ReplaceAll(line, nil)

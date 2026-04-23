@@ -40,25 +40,42 @@ func TestBorderWriter_PassThroughWhenNotTTY(t *testing.T) {
 	assert.Equal(t, "hello\nworld\n", buf.String(), "non-tty output must be untouched")
 }
 
+// expected layout helpers — keep tests resilient to padding tweaks while still
+// asserting on the visible structure.
+const (
+	indent       = "   " // matches leftIndent in border.go
+	contentExtra = 8     // chars used by indent + borders + padding (width - contentExtra = content width)
+)
+
+// padded returns the inner content (line + right padding) for a given visible
+// length and total terminal width.
+func padded(line string, visibleLen, width int) string {
+	pad := (width - contentExtra) - visibleLen
+	if pad < 0 {
+		pad = 0
+	}
+	return line + strings.Repeat(" ", pad)
+}
+
 func TestBorderWriter_RendersTopAndBottomBorder(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 20) // content width = 14
+	bw := newBorderWriter(buf, 20)
 	bw.Start()
 	require.NoError(t, bw.Close())
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 2)
-	assert.Equal(t, " ╭"+strings.Repeat("─", 16)+"╮", lines[0])
-	assert.Equal(t, " ╰"+strings.Repeat("─", 16)+"╯", lines[1])
+	assert.Equal(t, indent+"╭"+strings.Repeat("─", 20-6)+"╮", lines[0])
+	assert.Equal(t, indent+"╰"+strings.Repeat("─", 20-6)+"╯", lines[1])
 }
 
 func TestBorderWriter_WrapsCompleteLines(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 20) // content width = 14
+	bw := newBorderWriter(buf, 20)
 	bw.Start()
 	_, err := bw.Write([]byte("hello\n"))
 	require.NoError(t, err)
@@ -66,7 +83,7 @@ func TestBorderWriter_WrapsCompleteLines(t *testing.T) {
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
-	assert.Equal(t, " │ hello"+strings.Repeat(" ", 10)+"│", lines[1])
+	assert.Equal(t, indent+"│ "+padded("hello", 5, 20)+" │", lines[1])
 }
 
 func TestBorderWriter_BuffersPartialLinesAcrossWrites(t *testing.T) {
@@ -86,7 +103,7 @@ func TestBorderWriter_BuffersPartialLinesAcrossWrites(t *testing.T) {
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
-	assert.Equal(t, " │ hello"+strings.Repeat(" ", 10)+"│", lines[1])
+	assert.Equal(t, indent+"│ "+padded("hello", 5, 20)+" │", lines[1])
 }
 
 func TestBorderWriter_FlushesPendingPartialLineOnClose(t *testing.T) {
@@ -101,7 +118,7 @@ func TestBorderWriter_FlushesPendingPartialLineOnClose(t *testing.T) {
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
-	assert.Equal(t, " │ trailing"+strings.Repeat(" ", 7)+"│", lines[1])
+	assert.Equal(t, indent+"│ "+padded("trailing", 8, 20)+" │", lines[1])
 }
 
 func TestBorderWriter_HandlesMultipleLinesInSingleWrite(t *testing.T) {
@@ -116,16 +133,16 @@ func TestBorderWriter_HandlesMultipleLinesInSingleWrite(t *testing.T) {
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 5)
-	assert.Equal(t, " │ one"+strings.Repeat(" ", 12)+"│", lines[1])
-	assert.Equal(t, " │ two"+strings.Repeat(" ", 12)+"│", lines[2])
-	assert.Equal(t, " │ three"+strings.Repeat(" ", 10)+"│", lines[3])
+	assert.Equal(t, indent+"│ "+padded("one", 3, 20)+" │", lines[1])
+	assert.Equal(t, indent+"│ "+padded("two", 3, 20)+" │", lines[2])
+	assert.Equal(t, indent+"│ "+padded("three", 5, 20)+" │", lines[3])
 }
 
 func TestBorderWriter_LongLineSkipsRightBorder(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 20) // content width = 14
+	bw := newBorderWriter(buf, 20)
 	bw.Start()
 	long := strings.Repeat("x", 30)
 	_, err := bw.Write([]byte(long + "\n"))
@@ -134,14 +151,14 @@ func TestBorderWriter_LongLineSkipsRightBorder(t *testing.T) {
 
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
-	assert.Equal(t, " │ "+long, lines[1], "overflowing line must skip right border")
+	assert.Equal(t, indent+"│ "+long, lines[1], "overflowing line must skip right border")
 }
 
 func TestBorderWriter_StripsAnsiForWidth(t *testing.T) {
 	withNoColor(t)
 	buf := &borderBuffer{}
 
-	bw := newBorderWriter(buf, 20) // content width = 14
+	bw := newBorderWriter(buf, 20)
 	bw.Start()
 	// "hello" is 5 visible chars, surrounded by ANSI escapes
 	_, err := bw.Write([]byte("\x1b[31mhello\x1b[0m\n"))
@@ -151,7 +168,7 @@ func TestBorderWriter_StripsAnsiForWidth(t *testing.T) {
 	lines := splitLines(buf.String())
 	require.Len(t, lines, 3)
 	// padding must be computed from the visible width (5), not the raw byte length
-	assert.Equal(t, " │ \x1b[31mhello\x1b[0m"+strings.Repeat(" ", 10)+"│", lines[1])
+	assert.Equal(t, indent+"│ "+padded("\x1b[31mhello\x1b[0m", 5, 20)+" │", lines[1])
 }
 
 func TestBorderWriter_LazyStartOnFirstWrite(t *testing.T) {
