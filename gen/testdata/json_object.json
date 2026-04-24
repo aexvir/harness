@@ -1,0 +1,5 @@
+{
+  // JSONC comment
+  "key": "val",
+  "tags": ["a", "b",],
+}
